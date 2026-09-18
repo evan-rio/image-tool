@@ -170,6 +170,20 @@ python selftest.py
 
 OpenCV 自身还内含多个第三方库（libjpeg-turbo、libpng、libtiff、libwebp、FFmpeg 等），各自的许可文本见 OpenCV 官方发行包的 `etc/licenses` 目录。
 
+### OpenCV 是从哪来的
+
+**本仓库不内嵌 OpenCV 的源码**，也没有任何本地改动过的 OpenCV 副本。构建时通过 PyPI 安装 `opencv-python`，直接使用官方为各平台编译好的二进制包 —— 和其他所有用 OpenCV 的项目做法一致。
+
+这样做的好处是：仓库体积小、克隆快，而且用到的 OpenCV 永远对应一个已发布的官方版本。需要看源码的话，在这里：
+
+| 项目 | 官方地址 |
+|---|---|
+| OpenCV 库 | [github.com/opencv/opencv](https://github.com/opencv/opencv) |
+| OpenCV 发行版 | [github.com/opencv/opencv/releases](https://github.com/opencv/opencv/releases) |
+| 模型仓库（YuNet 等） | [github.com/opencv/opencv_zoo](https://github.com/opencv/opencv_zoo) |
+
+如果你想**改这个软件本身的行为**，整个程序就是 `main.py` 一个文件 —— 见 [从源码构建](#从源码构建)。整个过程完全不涉及 OpenCV 源码。
+
 ---
 
 ## 开源许可

@@ -170,6 +170,20 @@ python selftest.py
 
 OpenCV itself bundles further third-party libraries (libjpeg-turbo, libpng, libtiff, libwebp, FFmpeg, and others). Their licence texts are in the `etc/licenses` directory of the official OpenCV distribution.
 
+### Where OpenCV comes from
+
+**This repository does not vendor OpenCV's source code**, and there is no locally patched copy of it anywhere. The build installs OpenCV from PyPI (`opencv-python`), which ships the officially compiled binaries for each platform — the same thing every other project that uses OpenCV does.
+
+That keeps this repository small enough to clone quickly and guarantees the OpenCV code always matches a released upstream version. If you want the source, it is here:
+
+| Project | Official source |
+|---|---|
+| OpenCV library | [github.com/opencv/opencv](https://github.com/opencv/opencv) |
+| OpenCV releases | [github.com/opencv/opencv/releases](https://github.com/opencv/opencv/releases) |
+| Model zoo (YuNet and others) | [github.com/opencv/opencv_zoo](https://github.com/opencv/opencv_zoo) |
+
+If you want to **change how the application itself works**, the whole program is `main.py` — see [Building from source](#building-from-source). No OpenCV source is involved at any point.
+
 ---
 
 ## Licence
