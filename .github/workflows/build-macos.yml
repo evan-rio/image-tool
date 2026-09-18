@@ -97,7 +97,11 @@ jobs:
           PID=$!
           sleep 12
           if kill -0 $PID 2>/dev/null; then
-            echo "启动正常"; kill $PID 2>/dev/null; sleep 1
+            echo "启动正常"
+            kill $PID 2>/dev/null
+            # 等进程彻底退干净再往下走，否则 hdiutil 会报 Resource busy
+            pkill -9 -f "OpenCV 图片处理" 2>/dev/null || true
+            sleep 3
           else
             echo "启动失败："; cat run.log; exit 1
           fi
@@ -108,8 +112,16 @@ jobs:
           rm -rf "$STAGE"; mkdir -p "$STAGE"
           ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
           ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" \
-            -ov -format UDZO "dist/image-tool-${VERSION}-macos-arm64.dmg"
+          OUT="dist/image-tool-${VERSION}-macos-arm64.dmg"
+          ok=0
+          for i in 1 2 3 4; do
+            if hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" -ov -format UDZO "$OUT"; then
+              ok=1; break
+            fi
+            echo "hdiutil 第 $i 次失败，等 8 秒重试"
+            sleep 8
+          done
+          [ "$ok" = "1" ] || { echo "DMG 生成失败"; exit 1; }
           rm -rf "$STAGE"
           cd dist
           ditto -c -k --sequesterRsrc --keepParent \
@@ -225,7 +237,11 @@ jobs:
           PID=$!
           sleep 12
           if kill -0 $PID 2>/dev/null; then
-            echo "启动正常"; kill $PID 2>/dev/null; sleep 1
+            echo "启动正常"
+            kill $PID 2>/dev/null
+            # 等进程彻底退干净再往下走，否则 hdiutil 会报 Resource busy
+            pkill -9 -f "OpenCV 图片处理" 2>/dev/null || true
+            sleep 3
           else
             echo "启动失败："; cat run.log; exit 1
           fi
@@ -236,8 +252,16 @@ jobs:
           rm -rf "$STAGE"; mkdir -p "$STAGE"
           ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
           ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" \
-            -ov -format UDZO "dist/image-tool-${VERSION}-macos-x86_64.dmg"
+          OUT="dist/image-tool-${VERSION}-macos-x86_64.dmg"
+          ok=0
+          for i in 1 2 3 4; do
+            if hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" -ov -format UDZO "$OUT"; then
+              ok=1; break
+            fi
+            echo "hdiutil 第 $i 次失败，等 8 秒重试"
+            sleep 8
+          done
+          [ "$ok" = "1" ] || { echo "DMG 生成失败"; exit 1; }
           rm -rf "$STAGE"
           cd dist
           ditto -c -k --sequesterRsrc --keepParent \
