@@ -3,11 +3,20 @@ name: Build macOS
 # 这个分支只放构建相关的东西，源码在 main 分支。
 #
 # 触发方式（网页上的 Run workflow 按钮不会显示，因为本工作流不在默认分支上）：
-#   gh workflow run build-macos.yml --ref build
+#   gh workflow run build-macos.yml --ref build                    # 只构建
+#   gh workflow run build-macos.yml --ref build -f publish=true    # 构建并发布 Release
 # 或者往本分支推一次提交。
+#
+# 发布时标签自动取 main.py 里的 APP_VERSION（例如 1.0.5 → v1.0.5），
+# 文件由构建机直接推到 Release，不经手任何人的本地磁盘。
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: '构建完成后同时发布 GitHub Release（标签取自 main.py 里的版本号）'
+        type: boolean
+        default: false
   push:
     branches: [build]
     paths:
@@ -244,3 +253,54 @@ jobs:
           path: |
             dist/image-tool-*-macos-x86_64.dmg
             dist/image-tool-*-macos-x86_64.zip
+
+  # ------------------------------------------------------------------
+  # 发布：构建机自己把成品传到 Release。
+  # GitHub 没有「把 artifact 转成 Release 附件」的接口，两套存储是分开的，
+  # 但文件本来就在构建机的磁盘上，直接推上去即可，不需要任何人下载再上传。
+  # ------------------------------------------------------------------
+  release:
+    name: Publish release
+    needs: [arm64, x86_64]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取出 build 分支（需要 RELEASE_NOTES.md）
+        uses: actions/checkout@v4
+
+      - name: 取出 main 分支（需要里面的版本号）
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: src
+
+      - name: 读取版本号并算出标签
+        run: |
+          V=$(python3 -c "import re;print(re.search(r'APP_VERSION = \"([^\"]+)\"', open('src/main.py',encoding='utf-8').read()).group(1))")
+          echo "版本：$V"
+          echo "TAG=v$V" >> "$GITHUB_ENV"
+
+      - name: 取回两个架构的成品
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: 看看要发布哪些文件
+        run: ls -lh artifacts
+
+      - name: 创建 Release（已存在则追加文件）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG 已存在，追加新文件"
+            gh release upload "$TAG" artifacts/* -R "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "新建 Release $TAG"
+            gh release create "$TAG" \
+              -R "$GITHUB_REPOSITORY" \
+              --title "Image Tool $TAG" \
+              --notes-file .github/RELEASE_NOTES.md \
+              artifacts/*
+          fi
