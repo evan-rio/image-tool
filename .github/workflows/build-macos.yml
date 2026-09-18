@@ -1,0 +1,133 @@
+name: 打包 macOS 版
+
+# 什么时候自动打包：
+#   1) 在网页上手动点一下（Actions 页面 -> 左侧选这个工作流 -> Run workflow）
+#   2) 往 main 分支推代码时自动跑
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'main.py'
+      - 'make_icon.py'
+      - 'requirements.txt'
+      - 'models/**'
+      - '.github/workflows/build-macos.yml'
+
+jobs:
+  build:
+    # macos-14 及之后的镜像都是 Apple Silicon（M 系列芯片），
+    # 打出来的就是 arm64 原生程序。
+    runs-on: macos-14
+
+    steps:
+      - name: 取出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 生成图标（.icns / .ico / .png）
+        run: python make_icon.py
+
+      - name: PyInstaller 打包成 .app
+        run: |
+          python -m PyInstaller \
+            --noconfirm --clean --windowed --onedir \
+            --name "OpenCV 图片处理" \
+            --icon app.icns \
+            --osx-bundle-identifier com.photostudio.opencv-image-tool \
+            --target-arch arm64 \
+            --add-data "app.icns:." \
+            --add-data "app_icon.png:." \
+            --add-data "models/face_detection_yunet_2023mar.onnx:models" \
+            --exclude-module matplotlib \
+            --exclude-module scipy \
+            --exclude-module pandas \
+            --exclude-module pytest \
+            --exclude-module PyQt5 \
+            --exclude-module PySide2 \
+            --noupx \
+            main.py
+
+      - name: 临时签名（否则 Gatekeeper 会直接拦住）
+        run: |
+          codesign --force --deep --sign - "dist/OpenCV 图片处理.app"
+          xattr -cr "dist/OpenCV 图片处理.app"
+          codesign --verify --verbose "dist/OpenCV 图片处理.app" || true
+
+      - name: 检查产物是否完整
+        run: |
+          APP="dist/OpenCV 图片处理.app"
+          EXE="$APP/Contents/MacOS/OpenCV 图片处理"
+          test -d "$APP"              || { echo "❌ 没有生成 .app"; exit 1; }
+          test -f "$EXE"              || { echo "❌ 可执行文件不存在"; exit 1; }
+          echo "可执行文件架构：$(lipo -archs "$EXE")"
+          echo "—— 检查内置资源 ——"
+          for f in app.icns app_icon.png face_detection_yunet_2023mar.onnx; do
+            if find "$APP" -name "$f" | grep -q .; then
+              echo "  ✅ $f"
+            else
+              echo "  ❌ 缺少 $f"; exit 1
+            fi
+          done
+          echo "包体积：$(du -sh "$APP" | cut -f1)"
+
+      - name: 试启动一次（抓缺库、崩溃这类问题）
+        run: |
+          set +e
+          APP="dist/OpenCV 图片处理.app"
+          "$APP/Contents/MacOS/OpenCV 图片处理" > app_run.log 2>&1 &
+          PID=$!
+          sleep 12
+          if kill -0 $PID 2>/dev/null; then
+            echo "✅ 应用启动正常（进程存活 12 秒无崩溃）"
+            kill "$PID" 2>/dev/null
+            sleep 1
+          else
+            echo "❌ 应用启动后立刻退出了，日志如下："
+            cat app_run.log
+            exit 1
+          fi
+          echo "—— 启动日志（供参考）——"
+          cat app_run.log
+
+      - name: 制作 DMG 安装包
+        run: |
+          STAGE=dist/_dmg_stage
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create \
+            -volname "OpenCV 图片处理" \
+            -srcfolder "$STAGE" \
+            -ov -format UDZO \
+            "dist/图片处理-1.0.0-mac-arm64.dmg"
+          rm -rf "$STAGE"
+          ls -lh dist/*.dmg
+
+      - name: 把 .app 打成 zip（下载后解压即用）
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "OpenCV 图片处理.app" "图片处理-1.0.0-mac-arm64.zip"
+          ls -lh *.zip
+
+      - name: 上传成品
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-arm64
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            dist/图片处理-1.0.0-mac-arm64.dmg
+            dist/图片处理-1.0.0-mac-arm64.zip
