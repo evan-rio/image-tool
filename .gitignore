@@ -1,0 +1,8 @@
+# 这个分支只放构建与发布相关的东西。下面这些是本地生成物，不入库。
+__pycache__/
+*.pyc
+build/
+dist/
+app.ico
+app_icon.png
+app.icns

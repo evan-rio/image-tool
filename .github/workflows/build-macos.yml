@@ -3,8 +3,8 @@ name: Build macOS
 # 这个分支只放构建相关的东西，源码在 main 分支。
 #
 # 触发方式（网页上的 Run workflow 按钮不会显示，因为本工作流不在默认分支上）：
-#   gh workflow run build-macos.yml --ref build                    # 只构建
-#   gh workflow run build-macos.yml --ref build -f publish=true    # 构建并发布 Release
+#   gh workflow run build-macos.yml --ref packaging                    # 只构建
+#   gh workflow run build-macos.yml --ref packaging -f publish=true    # 构建并发布 Release
 # 或者往本分支推一次提交。
 #
 # 发布时标签自动取 main.py 里的 APP_VERSION（例如 1.0.5 → v1.0.5），
@@ -62,7 +62,7 @@ jobs:
         run: |
           python -m PyInstaller \
             --noconfirm --clean --windowed --onedir \
-            --name "OpenCV 图片处理" \
+            --name "OpenCV Image Tool" \
             --icon app.icns \
             --osx-bundle-identifier com.evanrio.opencv-image-tool \
             --target-arch arm64 \
@@ -76,13 +76,13 @@ jobs:
 
       - name: 临时签名
         run: |
-          codesign --force --deep --sign - "dist/OpenCV 图片处理.app"
-          xattr -cr "dist/OpenCV 图片处理.app"
+          codesign --force --deep --sign - "dist/OpenCV Image Tool.app"
+          xattr -cr "dist/OpenCV Image Tool.app"
 
       - name: 检查产物
         run: |
-          APP="dist/OpenCV 图片处理.app"
-          EXE="$APP/Contents/MacOS/OpenCV 图片处理"
+          APP="dist/OpenCV Image Tool.app"
+          EXE="$APP/Contents/MacOS/OpenCV Image Tool"
           test -f "$EXE" || { echo "缺可执行文件"; exit 1; }
           echo "架构：$(lipo -archs "$EXE")"
           lipo -archs "$EXE" | grep -q arm64 || { echo "架构不对"; exit 1; }
@@ -93,14 +93,14 @@ jobs:
       - name: 试启动
         run: |
           set +e
-          "dist/OpenCV 图片处理.app/Contents/MacOS/OpenCV 图片处理" > run.log 2>&1 &
+          "dist/OpenCV Image Tool.app/Contents/MacOS/OpenCV Image Tool" > run.log 2>&1 &
           PID=$!
           sleep 12
           if kill -0 $PID 2>/dev/null; then
             echo "启动正常"
             kill $PID 2>/dev/null
             # 等进程彻底退干净再往下走，否则 hdiutil 会报 Resource busy
-            pkill -9 -f "OpenCV 图片处理" 2>/dev/null || true
+            pkill -9 -f "OpenCV Image Tool" 2>/dev/null || true
             sleep 3
           else
             echo "启动失败："; cat run.log; exit 1
@@ -110,12 +110,12 @@ jobs:
         run: |
           STAGE=dist/_stage
           rm -rf "$STAGE"; mkdir -p "$STAGE"
-          ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
+          ditto "dist/OpenCV Image Tool.app" "$STAGE/OpenCV Image Tool.app"
           ln -s /Applications "$STAGE/Applications"
           OUT="dist/image-tool-${VERSION}-macos-arm64.dmg"
           ok=0
           for i in 1 2 3 4; do
-            if hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" -ov -format UDZO "$OUT"; then
+            if hdiutil create -volname "OpenCV Image Tool" -srcfolder "$STAGE" -ov -format UDZO "$OUT"; then
               ok=1; break
             fi
             echo "hdiutil 第 $i 次失败，等 8 秒重试"
@@ -125,7 +125,7 @@ jobs:
           rm -rf "$STAGE"
           cd dist
           ditto -c -k --sequesterRsrc --keepParent \
-            "OpenCV 图片处理.app" "image-tool-${VERSION}-macos-arm64.zip"
+            "OpenCV Image Tool.app" "image-tool-${VERSION}-macos-arm64.zip"
           ls -lh *.dmg *.zip
 
       - name: 上传产物
@@ -201,7 +201,7 @@ jobs:
         run: |
           arch -x86_64 "$PY" -m PyInstaller \
             --noconfirm --clean --windowed --onedir \
-            --name "OpenCV 图片处理" \
+            --name "OpenCV Image Tool" \
             --icon app.icns \
             --osx-bundle-identifier com.evanrio.opencv-image-tool \
             --target-arch x86_64 \
@@ -215,32 +215,32 @@ jobs:
 
       - name: 临时签名
         run: |
-          codesign --force --deep --sign - "dist/OpenCV 图片处理.app"
-          xattr -cr "dist/OpenCV 图片处理.app"
+          codesign --force --deep --sign - "dist/OpenCV Image Tool.app"
+          xattr -cr "dist/OpenCV Image Tool.app"
 
       - name: 检查产物
         run: |
-          APP="dist/OpenCV 图片处理.app"
-          EXE="$APP/Contents/MacOS/OpenCV 图片处理"
+          APP="dist/OpenCV Image Tool.app"
+          EXE="$APP/Contents/MacOS/OpenCV Image Tool"
           test -f "$EXE" || { echo "缺可执行文件"; exit 1; }
           echo "架构：$(lipo -archs "$EXE")"
           lipo -archs "$EXE" | grep -q x86_64 || { echo "架构不对，不是 x86_64"; exit 1; }
           echo "—— 确认内置的 Python 与 OpenCV 也是 x86_64 ——"
-          file "$APP/Contents/MacOS/OpenCV 图片处理" | head -1
+          file "$APP/Contents/MacOS/OpenCV Image Tool" | head -1
           find "$APP" -name "libpython3*.dylib" -exec file {} \;
           find "$APP" -name "cv2*.so" -exec file {} \;
 
       - name: 试启动
         run: |
           set +e
-          "dist/OpenCV 图片处理.app/Contents/MacOS/OpenCV 图片处理" > run.log 2>&1 &
+          "dist/OpenCV Image Tool.app/Contents/MacOS/OpenCV Image Tool" > run.log 2>&1 &
           PID=$!
           sleep 12
           if kill -0 $PID 2>/dev/null; then
             echo "启动正常"
             kill $PID 2>/dev/null
             # 等进程彻底退干净再往下走，否则 hdiutil 会报 Resource busy
-            pkill -9 -f "OpenCV 图片处理" 2>/dev/null || true
+            pkill -9 -f "OpenCV Image Tool" 2>/dev/null || true
             sleep 3
           else
             echo "启动失败："; cat run.log; exit 1
@@ -250,12 +250,12 @@ jobs:
         run: |
           STAGE=dist/_stage
           rm -rf "$STAGE"; mkdir -p "$STAGE"
-          ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
+          ditto "dist/OpenCV Image Tool.app" "$STAGE/OpenCV Image Tool.app"
           ln -s /Applications "$STAGE/Applications"
           OUT="dist/image-tool-${VERSION}-macos-x86_64.dmg"
           ok=0
           for i in 1 2 3 4; do
-            if hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" -ov -format UDZO "$OUT"; then
+            if hdiutil create -volname "OpenCV Image Tool" -srcfolder "$STAGE" -ov -format UDZO "$OUT"; then
               ok=1; break
             fi
             echo "hdiutil 第 $i 次失败，等 8 秒重试"
@@ -265,7 +265,7 @@ jobs:
           rm -rf "$STAGE"
           cd dist
           ditto -c -k --sequesterRsrc --keepParent \
-            "OpenCV 图片处理.app" "image-tool-${VERSION}-macos-x86_64.zip"
+            "OpenCV Image Tool.app" "image-tool-${VERSION}-macos-x86_64.zip"
           ls -lh *.dmg *.zip
 
       - name: 上传产物
