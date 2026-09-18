@@ -1,0 +1,246 @@
+name: Build macOS
+
+# 这个分支只放构建相关的东西，源码在 main 分支。
+#
+# 触发方式（网页上的 Run workflow 按钮不会显示，因为本工作流不在默认分支上）：
+#   gh workflow run build-macos.yml --ref build
+# 或者往本分支推一次提交。
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [build]
+    paths:
+      - '.github/workflows/build-macos.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # Apple Silicon（M 系列）—— 在 arm64 机器上原生构建
+  # ------------------------------------------------------------------
+  arm64:
+    name: macOS arm64
+    runs-on: macos-14
+    steps:
+      - name: 取出源码（来自 main 分支）
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 生成图标
+        run: python make_icon.py
+
+      - name: 读取版本号
+        run: |
+          V=$(python -c "import re;print(re.search(r'APP_VERSION = \"([^\"]+)\"', open('main.py',encoding='utf-8').read()).group(1))")
+          echo "版本：$V"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: PyInstaller 打包
+        run: |
+          python -m PyInstaller \
+            --noconfirm --clean --windowed --onedir \
+            --name "OpenCV 图片处理" \
+            --icon app.icns \
+            --osx-bundle-identifier com.evanrio.opencv-image-tool \
+            --target-arch arm64 \
+            --add-data "app.icns:." \
+            --add-data "app_icon.png:." \
+            --add-data "models/face_detection_yunet_2023mar.onnx:models" \
+            --exclude-module matplotlib --exclude-module scipy \
+            --exclude-module pandas --exclude-module pytest \
+            --exclude-module PyQt5 --exclude-module PySide2 \
+            --noupx main.py
+
+      - name: 临时签名
+        run: |
+          codesign --force --deep --sign - "dist/OpenCV 图片处理.app"
+          xattr -cr "dist/OpenCV 图片处理.app"
+
+      - name: 检查产物
+        run: |
+          APP="dist/OpenCV 图片处理.app"
+          EXE="$APP/Contents/MacOS/OpenCV 图片处理"
+          test -f "$EXE" || { echo "缺可执行文件"; exit 1; }
+          echo "架构：$(lipo -archs "$EXE")"
+          lipo -archs "$EXE" | grep -q arm64 || { echo "架构不对"; exit 1; }
+          for f in app.icns app_icon.png face_detection_yunet_2023mar.onnx; do
+            find "$APP" -name "$f" | grep -q . && echo "  ok $f" || { echo "  缺 $f"; exit 1; }
+          done
+
+      - name: 试启动
+        run: |
+          set +e
+          "dist/OpenCV 图片处理.app/Contents/MacOS/OpenCV 图片处理" > run.log 2>&1 &
+          PID=$!
+          sleep 12
+          if kill -0 $PID 2>/dev/null; then
+            echo "启动正常"; kill $PID 2>/dev/null; sleep 1
+          else
+            echo "启动失败："; cat run.log; exit 1
+          fi
+
+      - name: 制作 DMG 与 zip
+        run: |
+          STAGE=dist/_stage
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" \
+            -ov -format UDZO "dist/image-tool-${VERSION}-macos-arm64.dmg"
+          rm -rf "$STAGE"
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "OpenCV 图片处理.app" "image-tool-${VERSION}-macos-arm64.zip"
+          ls -lh *.dmg *.zip
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            dist/image-tool-*-macos-arm64.dmg
+            dist/image-tool-*-macos-arm64.zip
+
+  # ------------------------------------------------------------------
+  # Intel（x86_64）—— 在 Apple Silicon 机器上借 Rosetta 2 跑 x86_64 版
+  # Python 来构建，所以不需要 Intel 机器，也不用排队等 macos-13。
+  # ------------------------------------------------------------------
+  x86_64:
+    name: macOS x86_64
+    runs-on: macos-14
+    env:
+      PY: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3
+    steps:
+      - name: 取出源码（来自 main 分支）
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 启用 Rosetta 2
+        run: sudo softwareupdate --install-rosetta --agree-to-license || true
+
+      - name: 验证 Rosetta 可用
+        run: |
+          echo "本机架构: $(uname -m)"
+          echo "Rosetta 下: $(arch -x86_64 /usr/bin/uname -m)"
+
+      - name: 安装 x86_64 版 Python（python.org 的 universal2 安装包）
+        run: |
+          curl -fsSL -o /tmp/python.pkg \
+            https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg
+          sudo installer -pkg /tmp/python.pkg -target /
+
+      - name: 确认 Python 以 x86_64 运行
+        run: |
+          arch -x86_64 "$PY" -c "import platform, sys; print('架构:', platform.machine(), '| 版本:', sys.version.split()[0])"
+          arch -x86_64 "$PY" -c "import tkinter; print('tkinter 可用')"
+
+      - name: 安装依赖（会拉到 x86_64 的轮子）
+        run: |
+          arch -x86_64 "$PY" -m pip install --upgrade pip
+          arch -x86_64 "$PY" -m pip install -r requirements.txt
+
+      - name: 确认关键依赖是 x86_64
+        run: |
+          arch -x86_64 "$PY" - <<'EOF'
+          import platform
+          import cv2, numpy, PIL
+          print('python :', platform.machine())
+          print('opencv :', cv2.__version__, cv2.__file__)
+          print('numpy  :', numpy.__version__)
+          print('pillow :', PIL.__version__)
+          EOF
+
+      - name: 生成图标
+        run: arch -x86_64 "$PY" make_icon.py
+
+      - name: 读取版本号
+        run: |
+          V=$(arch -x86_64 "$PY" -c "import re;print(re.search(r'APP_VERSION = \"([^\"]+)\"', open('main.py',encoding='utf-8').read()).group(1))")
+          echo "版本：$V"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: PyInstaller 打包
+        run: |
+          arch -x86_64 "$PY" -m PyInstaller \
+            --noconfirm --clean --windowed --onedir \
+            --name "OpenCV 图片处理" \
+            --icon app.icns \
+            --osx-bundle-identifier com.evanrio.opencv-image-tool \
+            --target-arch x86_64 \
+            --add-data "app.icns:." \
+            --add-data "app_icon.png:." \
+            --add-data "models/face_detection_yunet_2023mar.onnx:models" \
+            --exclude-module matplotlib --exclude-module scipy \
+            --exclude-module pandas --exclude-module pytest \
+            --exclude-module PyQt5 --exclude-module PySide2 \
+            --noupx main.py
+
+      - name: 临时签名
+        run: |
+          codesign --force --deep --sign - "dist/OpenCV 图片处理.app"
+          xattr -cr "dist/OpenCV 图片处理.app"
+
+      - name: 检查产物
+        run: |
+          APP="dist/OpenCV 图片处理.app"
+          EXE="$APP/Contents/MacOS/OpenCV 图片处理"
+          test -f "$EXE" || { echo "缺可执行文件"; exit 1; }
+          echo "架构：$(lipo -archs "$EXE")"
+          lipo -archs "$EXE" | grep -q x86_64 || { echo "架构不对，不是 x86_64"; exit 1; }
+          echo "—— 确认内置的 Python 与 OpenCV 也是 x86_64 ——"
+          file "$APP/Contents/MacOS/OpenCV 图片处理" | head -1
+          find "$APP" -name "libpython3*.dylib" -exec file {} \;
+          find "$APP" -name "cv2*.so" -exec file {} \;
+
+      - name: 试启动
+        run: |
+          set +e
+          "dist/OpenCV 图片处理.app/Contents/MacOS/OpenCV 图片处理" > run.log 2>&1 &
+          PID=$!
+          sleep 12
+          if kill -0 $PID 2>/dev/null; then
+            echo "启动正常"; kill $PID 2>/dev/null; sleep 1
+          else
+            echo "启动失败："; cat run.log; exit 1
+          fi
+
+      - name: 制作 DMG 与 zip
+        run: |
+          STAGE=dist/_stage
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          ditto "dist/OpenCV 图片处理.app" "$STAGE/OpenCV 图片处理.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "OpenCV 图片处理" -srcfolder "$STAGE" \
+            -ov -format UDZO "dist/image-tool-${VERSION}-macos-x86_64.dmg"
+          rm -rf "$STAGE"
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "OpenCV 图片处理.app" "image-tool-${VERSION}-macos-x86_64.zip"
+          ls -lh *.dmg *.zip
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            dist/image-tool-*-macos-x86_64.dmg
+            dist/image-tool-*-macos-x86_64.zip
