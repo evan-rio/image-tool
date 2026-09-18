@@ -13,7 +13,11 @@ import tkinter as tk
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, APP_DIR)
 
+import lang
 import main as M
+
+# 测试统一跑中文界面，断言才对得上
+lang.set_language("zh")
 
 FAIL = []
 OK = []
@@ -237,19 +241,19 @@ def t_edge_detect_logic():
 
 def t_batch_resize():
     img = np.zeros((100, 200, 3), np.uint8)
-    out = M.BatchPanel._resize(img, {"mode": "按宽度", "value": "100"})
+    out = M.BatchPanel._resize(img, {"mode": "w", "value": "100"})
     assert out.shape[:2] == (50, 100), out.shape
-    out = M.BatchPanel._resize(img, {"mode": "按高度", "value": "50"})
+    out = M.BatchPanel._resize(img, {"mode": "h", "value": "50"})
     assert out.shape[:2] == (50, 100), out.shape
-    out = M.BatchPanel._resize(img, {"mode": "按百分比", "value": "50"})
+    out = M.BatchPanel._resize(img, {"mode": "pct", "value": "50"})
     assert out.shape[:2] == (50, 100), out.shape
-    out = M.BatchPanel._resize(img, {"mode": "按宽度", "value": "abc"})
+    out = M.BatchPanel._resize(img, {"mode": "w", "value": "abc"})
     assert out.shape[:2] == (100, 200), out.shape
 
 
 def t_batch_watermark():
     img = np.full((200, 300, 3), 100, np.uint8)
-    for pos in ("左上角", "右上角", "左下角", "右下角", "居中"):
+    for pos in ("tl", "tr", "bl", "br", "c"):
         out = M.BatchPanel._watermark(img, {
             "text": "测试水印ABC", "pos": pos, "opacity": 60,
             "size": 20, "color": "#FF0000"})
@@ -257,15 +261,15 @@ def t_batch_watermark():
         assert out.dtype == np.uint8, pos
     # 空文字
     out = M.BatchPanel._watermark(img, {
-        "text": "", "pos": "居中", "opacity": 50, "size": 20, "color": "#FFFFFF"})
+        "text": "", "pos": "c", "opacity": 50, "size": 20, "color": "#FFFFFF"})
     assert out.shape == img.shape
 
 
 def t_unicode_on_path():
     """确认程序目录含中文时 filter2D / 滤波不崩"""
     img = (np.random.rand(64, 64, 3) * 255).astype(np.uint8)
-    for name in ("浮雕", "卡通", "素描", "铅笔画", "复古", "怀旧褐色"):
-        M.FILTER_MAP[name](img)
+    for fid in ("emboss", "cartoon", "sketch", "pencil", "vintage", "sepia"):
+        M.FILTER_MAP[fid](img)
 
 
 def t_gui_construct():
@@ -635,7 +639,7 @@ def t_preview_filter_cancel_apply():
         hist0 = app.hist_idx
 
         # 点「卡通」滤镜 -> 预览，不动原图
-        app.apply_filter("卡通")
+        app.apply_filter("cartoon")
         assert pump(app, lambda: app.preview is not None
                     and not app._preview_running), "滤镜预览没算出来"
         assert app.pending_filter is not None
@@ -650,7 +654,7 @@ def t_preview_filter_cancel_apply():
         assert app.hist_idx == hist0
 
         # 再来一次，这次应用
-        app.apply_filter("素描")
+        app.apply_filter("sketch")
         assert pump(app, lambda: app.preview is not None and not app._preview_running)
         app.apply_slot("filter")
         assert pump(app, lambda: app.hist_idx == hist0 + 1), "应用滤镜没完成"
@@ -747,7 +751,7 @@ def t_independent_sections():
         hist0 = app.hist_idx
 
         # 滤镜待应用
-        app.apply_filter("灰度")
+        app.apply_filter("gray")
         assert pump(app, lambda: app.preview is not None
                     and not app._preview_running), "滤镜预览失败"
         # 同时调色待应用
@@ -776,7 +780,7 @@ def t_independent_sections():
         assert np.array_equal(app.work, img) or app.work is not None
 
         # 两个都设上，先应用滤镜：调色应保留为待应用
-        app.apply_filter("反色")
+        app.apply_filter("invert")
         assert pump(app, lambda: app.preview is not None and not app._preview_running)
         app.params["contrast"] = 30
         app._recompute_preview()
@@ -1030,10 +1034,12 @@ def t_queue_error_no_dialog():
 
 def t_window_icon_paths():
     """Windows 走 .ico，macOS/Linux 走 PNG(iconphoto)，两条路都不能崩"""
+    # 打包流程本来就会先跑 make_icon 生成图标，这里照做
+    import make_icon
+    make_icon.main()
     win = tk.Tk()
     win.withdraw()
     try:
-        # 数一下资源都在不在
         assert os.path.exists(M.resource_path("app.ico")), "缺 app.ico"
         assert os.path.exists(M.resource_path("app_icon.png")), "缺 app_icon.png"
 
@@ -1072,6 +1078,139 @@ def t_font_all_platforms():
             M.FONT_CANDIDATES = saved
 
 
+def t_lang_key_parity():
+    """两种语言的 key 必须完全一致，缺一条就会退回英文显示。"""
+    import lang as L
+    zh, en = set(L.STRINGS["zh"]), set(L.STRINGS["en"])
+    assert zh == en, ("只在中文:", sorted(zh - en), "只在英文:", sorted(en - zh))
+    assert len(zh) > 150, len(zh)
+    for code, table in L.STRINGS.items():
+        for k, v in table.items():
+            assert v and v != k, (code, k)
+    print("     %d 条文案，中英完全对应，无空值" % len(zh))
+
+
+def t_language_detect():
+    import lang as L
+    code = L.detect_system_language()
+    assert code in L.LANG_NAMES, code
+    print("     系统语言检测结果:", code)
+
+
+def t_language_switch():
+    """菜单里切语言：界面文字要跟着变。"""
+    import lang as L
+    orig = L.current_language()
+    saved = M.save_language
+    M.save_language = lambda code: True      # 别写进用户的配置文件
+    app = None
+    try:
+        L.set_language("en")
+        app = M.App()
+        app.update_idletasks()
+        app.update()
+        assert app.title() == M.APP_NAME == "OpenCV Image Tool", app.title()
+        assert app.nb_main.tab(0, "text").strip() == L.STRINGS["en"]["tab_single"]
+
+        app.set_lang("zh")
+        app.update_idletasks()
+        app.update()
+        assert app.nb_main.tab(0, "text").strip() == L.STRINGS["zh"]["tab_single"]
+        mb = app.nametowidget(app.cget("menu"))
+        labels = [mb.entrycget(i, "label") for i in range(1, mb.index("end"))]
+        assert L.STRINGS["zh"]["menu_file"] in labels, labels
+        assert L.STRINGS["zh"]["menu_language"] in labels, labels
+
+        app.set_lang("en")
+        app.update_idletasks()
+        app.update()
+        assert app.nb_main.tab(0, "text").strip() == L.STRINGS["en"]["tab_single"]
+        assert UI_ERRORS == [], UI_ERRORS
+        print("     en -> zh -> en 切换正常，菜单同步")
+    finally:
+        M.save_language = saved
+        L.set_language(orig)
+        if app is not None:
+            app.destroy()
+
+
+def t_language_switch_keeps_image():
+    """切换语言会重建界面，但已打开的图片和撤销历史必须保留。"""
+    import lang as L
+    d = os.path.join(APP_DIR, "_test_lang")
+    os.makedirs(d, exist_ok=True)
+    src = os.path.join(d, "a.png")
+    img = (np.random.rand(120, 180, 3) * 255).astype(np.uint8)
+    assert M.imwrite_unicode(src, img, ext=".png")
+    orig = L.current_language()
+    saved = M.save_language
+    M.save_language = lambda code: True
+    app = None
+    try:
+        L.set_language("zh")
+        app = M.App()
+        app.update_idletasks()
+        app.open_image(src)
+        app.update_idletasks()
+        app.rotate(90)
+        assert app.hist_idx == 1
+        before = app.work.shape
+
+        app.set_lang("en")
+        app.update_idletasks()
+        app.update()
+        assert app.work is not None, "切换语言后图片丢了"
+        assert app.work.shape == before, (app.work.shape, before)
+        assert app.hist_idx == 1, app.hist_idx
+        assert UI_ERRORS == [], UI_ERRORS
+        print("     切换语言后图片和历史都保留")
+    finally:
+        M.save_language = saved
+        L.set_language(orig)
+        if app is not None:
+            app.destroy()
+        _rmtree(d)
+
+
+def t_batch_ops_both_languages():
+    """下拉框显示的文字会随语言变，内部必须用 ASCII 代号。
+
+    这里出过 bug：切到英文后「按宽度」变成 "By width"，
+    代码里跟中文原文的比较全部失配，批量缩放静默失效。
+    """
+    import lang as L
+    orig = L.current_language()
+    try:
+        for code in ("zh", "en"):
+            L.set_language(code)
+
+            for idx, want in ((0, "w"), (1, "h"), (2, "pct")):
+                text = M.resize_mode_values()[idx]
+                got = M._display_to_id(text, M.RESIZE_MODES, "w")
+                assert got == want, (code, text, got, want)
+
+            img = np.zeros((100, 200, 3), np.uint8)
+            for text, want_shape in ((M.resize_mode_values()[0], (50, 100)),
+                                     (M.resize_mode_values()[1], (100, 200))):
+                mid = M._display_to_id(text, M.RESIZE_MODES, "w")
+                out = M.BatchPanel._resize(img, {"mode": mid, "value": "100"})
+                assert out.shape[:2] == want_shape, (code, text, out.shape)
+
+            for idx, want in ((0, "tl"), (1, "tr"), (2, "bl"), (3, "br"), (4, "c")):
+                text = M.wm_position_values()[idx]
+                got = M._display_to_id(text, M.WM_POSITIONS, "br")
+                assert got == want, (code, text, got, want)
+
+            out = M.BatchPanel._watermark(
+                np.full((200, 300, 3), 100, np.uint8),
+                {"text": "W", "pos": "c", "opacity": 60, "size": 20,
+                 "color": "#FF0000"})
+            assert out.shape == (200, 300, 3)
+        print("     中英两种语言下缩放/水印都正常")
+    finally:
+        L.set_language(orig)
+
+
 if __name__ == "__main__":
     tests = [
         ("导入与版本", t_import),
@@ -1108,6 +1247,11 @@ if __name__ == "__main__":
         ("后台异常不弹窗", t_queue_error_no_dialog),
         ("窗口图标两条路径", t_window_icon_paths),
         ("三平台字体退化", t_font_all_platforms),
+        ("语言包完整性", t_lang_key_parity),
+        ("系统语言检测", t_language_detect),
+        ("界面语言切换", t_language_switch),
+        ("切语言保留图片", t_language_switch_keeps_image),
+        ("双语下批量处理", t_batch_ops_both_languages),
     ]
     quiet_errors()
     for name, fn in tests:

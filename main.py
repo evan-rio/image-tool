@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""OpenCV 图片处理 —— 本地图片处理软件
+"""OpenCV Image Tool —— 本地图片处理软件
+
+界面文字支持简体中文和英文，启动时自动跟随系统语言，也可以在
+「语言」菜单里手动切换（手动选过之后会被记住）。
 
 功能：打开/另存、缩放旋转裁剪、调色滤镜、批量处理、自动增强/边缘检测/人脸检测
 """
@@ -16,7 +19,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, colorchooser
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
-APP_NAME = "OpenCV 图片处理"
+from lang import (t, APP_NAME, available_languages, current_language,
+                  set_language, save_language, init_language)
 APP_VERSION = "1.0.5"
 
 SUPPORTED_READ = (".jpg", ".jpeg", ".jfif", ".png", ".bmp", ".webp", ".tif", ".tiff",
@@ -28,24 +32,24 @@ FACE_MODEL = "face_detection_yunet_2023mar.onnx"
 
 # 可输出的图片格式：(扩展名, 界面显示名, 质量参数类型或 None, 是否只支持灰度)
 IMAGE_FORMATS = [
-    ("jpg",  "JPEG  最常用，体积小，有损",           "jpeg", False),
-    ("png",  "PNG   无损，支持透明",                 "png",  False),
-    ("webp", "WebP  体积比 JPEG 更小，现代格式",     "webp", False),
-    ("avif", "AVIF  体积最小，画质好（编码较慢）",   "avif", False),
-    ("bmp",  "BMP   无压缩位图",                     None,   False),
-    ("tif",  "TIFF  印刷与专业领域常用",             "tiff", False),
-    ("jp2",  "JPEG 2000  高压缩比",                  "jp2",  False),
-    ("gif",  "GIF   静态单帧",                       None,   False),
-    ("ico",  "ICO   Windows 图标",                   None,   False),
-    ("pdf",  "PDF   单页文档",                       None,   False),
-    ("tga",  "TGA   Targa",                          None,   False),
-    ("qoi",  "QOI   无损、编码极快",                 None,   False),
-    ("hdr",  "HDR   高动态范围",                     None,   False),
-    ("ppm",  "PPM   无损中间格式",                   None,   False),
-    ("pgm",  "PGM   灰度图",                         None,   True),
-    ("pbm",  "PBM   黑白位图",                       None,   True),
-    ("pfm",  "PFM   浮点图",                         None,   True),
-    ("ras",  "RAS   Sun Raster",                     None,   False),
+    ("jpg",  "fmt_jpg",           "jpeg", False),
+    ("png",  "fmt_png",                 "png",  False),
+    ("webp", "fmt_webp",     "webp", False),
+    ("avif", "fmt_avif",   "avif", False),
+    ("bmp",  "fmt_bmp",                     None,   False),
+    ("tif",  "fmt_tif",             "tiff", False),
+    ("jp2",  "fmt_jp2",                  "jp2",  False),
+    ("gif",  "fmt_gif",                       None,   False),
+    ("ico",  "fmt_ico",                   None,   False),
+    ("pdf",  "fmt_pdf",                       None,   False),
+    ("tga",  "fmt_tga",                          None,   False),
+    ("qoi",  "fmt_qoi",                 None,   False),
+    ("hdr",  "fmt_hdr",                     None,   False),
+    ("ppm",  "fmt_ppm",                   None,   False),
+    ("pgm",  "fmt_pgm",                         None,   True),
+    ("pbm",  "fmt_pbm",                       None,   True),
+    ("pfm",  "fmt_pfm",                         None,   True),
+    ("ras",  "fmt_ras",                     None,   False),
 ]
 FORMAT_EXT = [f[0] for f in IMAGE_FORMATS]
 GRAY_ONLY_EXT = {f[0] for f in IMAGE_FORMATS if f[3]}
@@ -131,7 +135,7 @@ def create_face_detector(size, score_threshold=0.6, nms_threshold=0.3, top_k=500
     """
     path = face_model_path()
     if not os.path.exists(path):
-        raise FileNotFoundError(f"找不到人脸检测模型：\n{path}")
+        raise FileNotFoundError(t("face_no_model", path=path))
 
     if path.isascii():
         return cv2.FaceDetectorYN.create(path, "", size,
@@ -423,20 +427,42 @@ def f_cool(img):
 
 
 FILTERS = [
-    ("灰度", f_gray),
-    ("黑白(二值)", f_binary),
-    ("反色", f_invert),
-    ("怀旧褐色", f_sepia),
-    ("复古", f_vintage),
-    ("素描", f_sketch),
-    ("铅笔画", f_pencil),
-    ("卡通", f_cartoon),
-    ("浮雕", f_emboss),
-    ("暖色调", f_warm),
-    ("冷色调", f_cool),
+    ("gray",    f_gray),
+    ("bw",      f_binary),
+    ("invert",  f_invert),
+    ("sepia",   f_sepia),
+    ("vintage", f_vintage),
+    ("sketch",  f_sketch),
+    ("pencil",  f_pencil),
+    ("cartoon", f_cartoon),
+    ("emboss",  f_emboss),
+    ("warm",    f_warm),
+    ("cool",    f_cool),
 ]
 
 FILTER_MAP = dict(FILTERS)
+
+# 批量处理的下拉框：界面上显示翻译后的文字，但内部一律用这些 ASCII 代号，
+# 否则界面切成英文之后，代码里跟中文原文的比较就全都对不上了。
+RESIZE_MODES = [("w", "mode_w"), ("h", "mode_h"), ("pct", "mode_pct")]
+WM_POSITIONS = [("tl", "pos_tl"), ("tr", "pos_tr"), ("bl", "pos_bl"),
+                ("br", "pos_br"), ("c", "pos_c")]
+
+
+def _display_to_id(text, table, fallback):
+    """把下拉框里选中的（翻译过的）文字还原成内部代号。"""
+    for ident, key in table:
+        if t(key) == text:
+            return ident
+    return fallback
+
+
+def resize_mode_values():
+    return [t(key) for _, key in RESIZE_MODES]
+
+
+def wm_position_values():
+    return [t(key) for _, key in WM_POSITIONS]
 
 
 def hex_to_bgr(s, default=(0, 0, 255)):
@@ -536,7 +562,7 @@ def apply_tool(img, spec, info=None):
 
     if kind == "face":
         out, n = detect_faces(img, spec)
-        info["note"] = f"检测到 {n} 张人脸" if n else "没有检测到人脸"
+        info["note"] = t("face_detected", n=n) if n else t("face_none")
         return out
 
     return img
@@ -547,14 +573,15 @@ def tool_label(spec):
         return ""
     kind = spec.get("kind")
     if kind == "filter":
-        return spec.get("name", "滤镜")
+        return t("filter_" + spec["name"]) if spec.get("name") in FILTER_MAP \
+        else t("tool_filter")
     if kind == "canny":
-        return f"边缘检测 {spec.get('lo')}/{spec.get('hi')}"
+        return t("tool_canny", lo=spec.get("lo"), hi=spec.get("hi"))
     if kind == "auto":
-        return "自动增强"
+        return t("tool_auto")
     if kind == "face":
-        return "人脸检测"
-    return "预览"
+        return t("tool_face")
+    return t("tool_preview")
 
 
 # --------------------------------------------------------------------------
@@ -642,7 +669,7 @@ class App(tk.Tk):
                     # 一堆弹窗会把整个程序卡住关不掉。
                     traceback.print_exc()
                     try:
-                        self.status.configure(text=f"操作失败：{e}")
+                        self.status.configure(text=t("err_fail", err=e))
                     except Exception:
                         pass
         except queue.Empty:
@@ -658,8 +685,7 @@ class App(tk.Tk):
         if bp is not None and getattr(bp, "_running", False):
             if not messagebox.askyesno(
                     APP_NAME,
-                    "批量处理还在进行中，确定要退出吗？\n\n"
-                    "已经处理完的图片会保留，剩下的不再处理。",
+                    t("quit_batch_msg"),
                     parent=self):
                 return
         self.destroy()
@@ -687,49 +713,57 @@ class App(tk.Tk):
         menubar = tk.Menu(self)
 
         m_file = tk.Menu(menubar, tearoff=0)
-        m_file.add_command(label="打开图片…", accelerator="Ctrl+O", command=self.open_image)
-        m_file.add_command(label="保存", accelerator="Ctrl+S", command=self.save)
-        m_file.add_command(label="另存为…", accelerator="Ctrl+Shift+S", command=self.save_as)
-        m_file.add_command(label="保存质量…", command=self.ask_save_quality)
+        m_file.add_command(label=t("menu_open"), accelerator="Ctrl+O", command=self.open_image)
+        m_file.add_command(label=t("menu_save"), accelerator="Ctrl+S", command=self.save)
+        m_file.add_command(label=t("menu_save_as"), accelerator="Ctrl+Shift+S", command=self.save_as)
+        m_file.add_command(label=t("menu_save_quality"), command=self.ask_save_quality)
         m_file.add_separator()
-        m_file.add_command(label="退出", command=self.destroy)
-        menubar.add_cascade(label="文件", menu=m_file)
+        m_file.add_command(label=t("menu_exit"), command=self.destroy)
+        menubar.add_cascade(label=t("menu_file"), menu=m_file)
 
         m_edit = tk.Menu(menubar, tearoff=0)
-        m_edit.add_command(label="撤销", accelerator="Ctrl+Z", command=self.undo)
-        m_edit.add_command(label="重做", accelerator="Ctrl+Y", command=self.redo)
+        m_edit.add_command(label=t("menu_undo"), accelerator="Ctrl+Z", command=self.undo)
+        m_edit.add_command(label=t("menu_redo"), accelerator="Ctrl+Y", command=self.redo)
         m_edit.add_separator()
-        m_edit.add_command(label="还原到打开时的状态", command=self.revert)
-        menubar.add_cascade(label="编辑", menu=m_edit)
+        m_edit.add_command(label=t("menu_revert"), command=self.revert)
+        menubar.add_cascade(label=t("menu_edit"), menu=m_edit)
 
         m_geo = tk.Menu(menubar, tearoff=0)
-        m_geo.add_command(label="向左旋转 90°", command=lambda: self.rotate(-90))
-        m_geo.add_command(label="向右旋转 90°", command=lambda: self.rotate(90))
-        m_geo.add_command(label="旋转 180°", command=lambda: self.rotate(180))
+        m_geo.add_command(label=t("menu_rot_ccw"), command=lambda: self.rotate(-90))
+        m_geo.add_command(label=t("menu_rot_cw"), command=lambda: self.rotate(90))
+        m_geo.add_command(label=t("menu_rot_180"), command=lambda: self.rotate(180))
         m_geo.add_separator()
-        m_geo.add_command(label="水平镜像", command=lambda: self.flip(1))
-        m_geo.add_command(label="垂直镜像", command=lambda: self.flip(0))
-        menubar.add_cascade(label="图像", menu=m_geo)
+        m_geo.add_command(label=t("menu_flip_h"), command=lambda: self.flip(1))
+        m_geo.add_command(label=t("menu_flip_v"), command=lambda: self.flip(0))
+        menubar.add_cascade(label=t("menu_image"), menu=m_geo)
 
         m_filter = tk.Menu(menubar, tearoff=0)
-        for name, _ in FILTERS:
-            m_filter.add_command(label=name, command=lambda n=name: self.apply_filter(n))
-        menubar.add_cascade(label="滤镜", menu=m_filter)
+        for fid, _ in FILTERS:
+            m_filter.add_command(label=t("filter_" + fid),
+                                 command=lambda n=fid: self.apply_filter(n))
+        menubar.add_cascade(label=t("tool_filter"), menu=m_filter)
 
         m_adv = tk.Menu(menubar, tearoff=0)
-        m_adv.add_command(label="自动增强", command=self.auto_enhance)
-        m_adv.add_command(label="边缘检测", command=self.edge_detect)
-        m_adv.add_command(label="人脸检测", command=self.face_detect)
-        menubar.add_cascade(label="高级", menu=m_adv)
+        m_adv.add_command(label=t("tool_auto"), command=self.auto_enhance)
+        m_adv.add_command(label=t("menu_edge"), command=self.edge_detect)
+        m_adv.add_command(label=t("tool_face"), command=self.face_detect)
+        menubar.add_cascade(label=t("menu_advanced"), menu=m_adv)
 
         m_batch = tk.Menu(menubar, tearoff=0)
-        m_batch.add_command(label="批量处理文件夹…", command=self.open_batch)
-        menubar.add_cascade(label="批量", menu=m_batch)
+        m_batch.add_command(label=t("menu_batch_open"), command=self.open_batch)
+        menubar.add_cascade(label=t("menu_batch"), menu=m_batch)
+
+        m_lang = tk.Menu(menubar, tearoff=0)
+        self._lang_var = tk.StringVar(value=current_language())
+        for code, name in available_languages():
+            m_lang.add_radiobutton(label=name, value=code, variable=self._lang_var,
+                                   command=lambda c=code: self.set_lang(c))
+        menubar.add_cascade(label=t("menu_language"), menu=m_lang)
 
         m_help = tk.Menu(menubar, tearoff=0)
-        m_help.add_command(label="使用说明", command=self.show_help)
-        m_help.add_command(label="关于", command=self.show_about)
-        menubar.add_cascade(label="帮助", menu=m_help)
+        m_help.add_command(label=t("menu_help_usage"), command=self.show_help)
+        m_help.add_command(label=t("menu_about"), command=self.show_about)
+        menubar.add_cascade(label=t("menu_help"), menu=m_help)
 
         self.config(menu=menubar)
 
@@ -744,25 +778,25 @@ class App(tk.Tk):
             b.pack(side="left", padx=2)
             return b
 
-        btn("打开", self.open_image)
-        btn("保存", self.save)
-        btn("另存为", self.save_as)
+        btn(t("tb_open"), self.open_image)
+        btn(t("menu_save"), self.save)
+        btn(t("tb_save_as"), self.save_as)
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=6)
-        self.b_undo = btn("撤销", self.undo)
-        self.b_redo = btn("重做", self.redo)
+        self.b_undo = btn(t("menu_undo"), self.undo)
+        self.b_redo = btn(t("menu_redo"), self.redo)
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=6)
-        self.b_fit = btn("适应窗口", self.fit_window)
+        self.b_fit = btn(t("tb_fit"), self.fit_window)
         btn("1:1", lambda: self.set_zoom(1.0))
-        btn("放大", lambda: self.set_zoom(self.zoom * 1.25))
-        btn("缩小", lambda: self.set_zoom(self.zoom / 1.25))
+        btn(t("tb_zoom_in"), lambda: self.set_zoom(self.zoom * 1.25))
+        btn(t("tb_zoom_out"), lambda: self.set_zoom(self.zoom / 1.25))
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=6)
-        self.b_crop = ttk.Button(bar, text="裁剪模式", command=self.toggle_crop)
+        self.b_crop = ttk.Button(bar, text=t("tb_crop"), command=self.toggle_crop)
         self.b_crop.pack(side="left", padx=2)
-        self.b_apply_crop = ttk.Button(bar, text="应用裁剪", command=self.apply_crop)
+        self.b_apply_crop = ttk.Button(bar, text=t("tb_crop_apply"), command=self.apply_crop)
         self.b_apply_crop.pack(side="left", padx=2)
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=6)
         # 按住不放可以临时看到原图
-        self.b_compare = ttk.Button(bar, text="按住看原图")
+        self.b_compare = ttk.Button(bar, text=t("tb_compare"))
         self.b_compare.pack(side="left", padx=2)
         self.b_compare.bind("<ButtonPress-1>", lambda e: self._set_show_orig(True))
         self.b_compare.bind("<ButtonRelease-1>", lambda e: self._set_show_orig(False))
@@ -773,20 +807,20 @@ class App(tk.Tk):
         self.nb_main.pack(side="top", fill="both", expand=True)
 
         page1 = ttk.Frame(self.nb_main)
-        self.nb_main.add(page1, text="     单张处理     ")
+        self.nb_main.add(page1, text="     " + t("tab_single") + "     ")
 
         # 左侧面板
-        left = ttk.Frame(page1, width=330, padding=6)
+        left = ttk.Frame(page1, width=385, padding=6)
         left.pack(side="left", fill="y")
         left.pack_propagate(False)
 
         nb = ttk.Notebook(left)
         nb.pack(fill="both", expand=True)
 
-        nb.add(self._tab_adjust(nb), text="调色")
-        nb.add(self._tab_filter(nb), text="滤镜")
-        nb.add(self._tab_geometry(nb), text="几何")
-        nb.add(self._tab_advanced(nb), text="高级")
+        nb.add(self._tab_adjust(nb), text=t("tab_adjust"))
+        nb.add(self._tab_filter(nb), text=t("tool_filter"))
+        nb.add(self._tab_geometry(nb), text=t("tab_geometry"))
+        nb.add(self._tab_advanced(nb), text=t("menu_advanced"))
 
         # 画布
         right = ttk.Frame(page1)
@@ -804,18 +838,65 @@ class App(tk.Tk):
 
         # 页签2：批量处理（就在主窗口里，不另开窗口）
         self.batch_panel = BatchPanel(self.nb_main, self)
-        self.nb_main.add(self.batch_panel, text="     批量处理     ")
+        self.nb_main.add(self.batch_panel, text="     " + t("tab_batch") + "     ")
+
+        self._bind_canvas()
+
+    # ---------------- 语言切换 ----------------
+
+    def set_lang(self, code):
+        """用户从菜单里选了语言：记住它，然后重建整个界面。"""
+        if code == current_language():
+            return
+        bp = getattr(self, "batch_panel", None)
+        if bp is not None and getattr(bp, "_running", False):
+            messagebox.showinfo(APP_NAME, t("lang_busy"), parent=self)
+            self._lang_var.set(current_language())
+            return
+        save_language(code)
+        set_language(code)
+        self._rebuild_ui()
+        self.update_status(t("lang_switched", name=dict(available_languages())[code]))
+
+    def _rebuild_ui(self):
+        """重建菜单、工具条、页面和状态栏（图片本身和撤销历史都保留）。"""
+        keep = (self.work, self.path, self.alpha, self.history, self.hist_idx,
+                self.zoom, self._show_orig)
+        try:
+            self.config(menu=tk.Menu(self))       # 先摘掉旧菜单栏
+        except Exception:
+            pass
+        for w in self.winfo_children():
+            w.destroy()
+        self.title(APP_NAME)
+
+        self._build_menu()
+        self._build_toolbar()
+        self._build_body()
+        self._build_statusbar()
+
+        (self.work, self.path, self.alpha, self.history, self.hist_idx,
+         self.zoom, self._show_orig) = keep
+
+        self._set_controls_enabled(self.work is not None)
+        self._update_bars()
+        if self.work is not None:
+            self._refresh_view_src()
+            self.set_zoom(self.zoom)
+            if self.path:
+                self.title(f"{os.path.basename(self.path)} — {APP_NAME}")
+        self.update_status()
 
     def show_batch_page(self):
         self.nb_main.select(self.batch_panel)
-        self.update_status("批量处理：选好文件夹和处理项后点「开始处理」")
+        self.update_status(t("status_batch_hint"))
 
     def _slider_row(self, parent, label, key, lo, hi):
         row = ttk.Frame(parent, padding=(0, 3))
         row.pack(fill="x")
         top = ttk.Frame(row)
         top.pack(fill="x")
-        ttk.Label(top, text=label, width=6).pack(side="left")
+        ttk.Label(top, text=label, width=12, anchor="w").pack(side="left")
         val = ttk.Label(top, text="0", width=5, anchor="e")
         val.pack(side="right")
         var = tk.DoubleVar(value=0)
@@ -831,9 +912,9 @@ class App(tk.Tk):
         self.param_labels = {}
         self.param_scales = {}
         f = ttk.Frame(nb, padding=8)
-        for label, key in [("亮度", "brightness"), ("对比度", "contrast"),
-                           ("饱和度", "saturation"), ("色调", "warmth"),
-                           ("锐化", "sharpen"), ("模糊", "blur")]:
+        for label, key in [(t("adj_brightness"), "brightness"), (t("adj_contrast"), "contrast"),
+                           (t("adj_saturation"), "saturation"), (t("adj_warmth"), "warmth"),
+                           (t("adj_sharpen"), "sharpen"), (t("adj_blur"), "blur")]:
             lo, hi = (-100, 100) if key != "blur" else (0, 100)
             if key == "sharpen":
                 lo = 0
@@ -841,39 +922,39 @@ class App(tk.Tk):
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
         self.b_adj_apply, self.b_adj_cancel = self._apply_row(
-            f, "应用调色", lambda: self.apply_slot("adjust"),
+            f, t("adj_apply"), lambda: self.apply_slot("adjust"),
             lambda: self.cancel_slot("adjust"),
-            hint="拖动滑块即时预览，满意后点「应用调色」。")
+            hint=t("adj_hint"))
         return f
 
     def _tab_filter(self, nb):
         f = ttk.Frame(nb, padding=8)
-        ttk.Label(f, text="点一下即可预览，不会立刻改动原图。",
+        ttk.Label(f, text=t("filter_hint"),
                   foreground="#666", wraplength=290, justify="left").pack(anchor="w")
         grid = ttk.Frame(f, padding=(0, 6))
         grid.pack(fill="x")
-        for i, (name, _) in enumerate(FILTERS):
-            ttk.Button(grid, text=name,
-                       command=lambda n=name: self.apply_filter(n)).grid(
+        for i, (fid, _) in enumerate(FILTERS):
+            ttk.Button(grid, text=t("filter_" + fid),
+                       command=lambda n=fid: self.apply_filter(n)).grid(
                 row=i // 2, column=i % 2, padx=2, pady=2, sticky="ew")
         grid.columnconfigure(0, weight=1)
         grid.columnconfigure(1, weight=1)
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
         self.b_flt_apply, self.b_flt_cancel = self._apply_row(
-            f, "应用滤镜", lambda: self.apply_slot("filter"),
+            f, t("filter_apply"), lambda: self.apply_slot("filter"),
             lambda: self.cancel_slot("filter"))
         return f
 
     def _tab_geometry(self, nb):
         f = ttk.Frame(nb, padding=8)
 
-        ttk.Label(f, text="这里的操作点一下立刻生效，\n不满意点「撤销上一步」或按 Ctrl+Z。",
+        ttk.Label(f, text=t("geo_hint"),
                   foreground="#666", wraplength=290, justify="left").pack(anchor="w")
-        ttk.Button(f, text="撤销上一步", command=self.undo).pack(fill="x", pady=(6, 4))
+        ttk.Button(f, text=t("geo_undo"), command=self.undo).pack(fill="x", pady=(6, 4))
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=4)
 
-        ttk.Label(f, text="旋转").pack(anchor="w")
+        ttk.Label(f, text=t("geo_rotate")).pack(anchor="w")
         row = ttk.Frame(f, padding=(0, 4))
         row.pack(fill="x")
         ttk.Button(row, text="↺ 90°", width=7,
@@ -885,59 +966,59 @@ class App(tk.Tk):
 
         row2 = ttk.Frame(f, padding=(0, 4))
         row2.pack(fill="x")
-        ttk.Button(row2, text="水平镜像", width=10,
+        ttk.Button(row2, text=t("menu_flip_h"),
                    command=lambda: self.flip(1)).pack(side="left", padx=2)
-        ttk.Button(row2, text="垂直镜像", width=10,
+        ttk.Button(row2, text=t("menu_flip_v"),
                    command=lambda: self.flip(0)).pack(side="left", padx=2)
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
-        ttk.Label(f, text="任意角度旋转").pack(anchor="w")
+        ttk.Label(f, text=t("geo_rotate_free")).pack(anchor="w")
         row3 = ttk.Frame(f, padding=(0, 4))
         row3.pack(fill="x")
         self.angle_var = tk.DoubleVar(value=0)
         ttk.Spinbox(row3, from_=-180, to=180, increment=1, width=6,
                     textvariable=self.angle_var).pack(side="left")
-        ttk.Button(row3, text="旋转", width=6,
+        ttk.Button(row3, text=t("geo_rotate"),
                    command=lambda: self.rotate_free(self.angle_var.get())).pack(side="left", padx=4)
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
-        ttk.Label(f, text="修改尺寸").pack(anchor="w")
+        ttk.Label(f, text=t("geo_resize")).pack(anchor="w")
         row4 = ttk.Frame(f, padding=(0, 4))
         row4.pack(fill="x")
-        ttk.Label(row4, text="宽").pack(side="left")
+        ttk.Label(row4, text=t("geo_w")).pack(side="left")
         self.w_var = tk.StringVar()
         ttk.Entry(row4, textvariable=self.w_var, width=6).pack(side="left", padx=2)
-        ttk.Label(row4, text="高").pack(side="left")
+        ttk.Label(row4, text=t("geo_h")).pack(side="left")
         self.h_var = tk.StringVar()
         ttk.Entry(row4, textvariable=self.h_var, width=6).pack(side="left", padx=2)
         self.w_var.trace_add("write", lambda *a: self._ratio_from("w"))
         self.h_var.trace_add("write", lambda *a: self._ratio_from("h"))
 
         self.lock_ratio = tk.BooleanVar(value=True)
-        ttk.Checkbutton(f, text="锁定宽高比", variable=self.lock_ratio).pack(anchor="w")
-        ttk.Button(f, text="应用尺寸", command=self.apply_resize).pack(fill="x", pady=4)
+        ttk.Checkbutton(f, text=t("geo_lock"), variable=self.lock_ratio).pack(anchor="w")
+        ttk.Button(f, text=t("geo_apply_resize"), command=self.apply_resize).pack(fill="x", pady=4)
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
-        ttk.Label(f, text="裁剪").pack(anchor="w")
-        ttk.Label(f, text="点「裁剪模式」后在图上拖拽框选，\n再点「应用裁剪」。",
+        ttk.Label(f, text=t("geo_crop")).pack(anchor="w")
+        ttk.Label(f, text=t("geo_crop_hint"),
                   foreground="#666", wraplength=290, justify="left").pack(anchor="w", pady=2)
-        ttk.Button(f, text="清除选区", command=self.clear_crop).pack(fill="x", pady=2)
+        ttk.Button(f, text=t("geo_clear_sel"), command=self.clear_crop).pack(fill="x", pady=2)
         return f
 
     def _tab_advanced(self, nb):
         f = ttk.Frame(nb, padding=8)
 
-        ttk.Label(f, text="自动增强 / 边缘检测").pack(anchor="w")
-        ttk.Button(f, text="自动增强（对比度+色彩）",
+        ttk.Label(f, text=t("adv_group")).pack(anchor="w")
+        ttk.Button(f, text=t("adv_auto"),
                    command=self.auto_enhance).pack(fill="x", pady=2)
-        ttk.Button(f, text="边缘检测（Canny）",
+        ttk.Button(f, text=t("adv_canny"),
                    command=self.edge_detect).pack(fill="x", pady=2)
 
-        ttk.Label(f, text="Canny 阈值", foreground="#666").pack(anchor="w", pady=(6, 0))
+        ttk.Label(f, text=t("adv_canny_th"), foreground="#666").pack(anchor="w", pady=(6, 0))
         self.canny_low = tk.IntVar(value=80)
         self.canny_high = tk.IntVar(value=180)
-        self.canny_low_lbl = ttk.Label(f, text="低阈值  80")
-        self.canny_high_lbl = ttk.Label(f, text="高阈值  180")
+        self.canny_low_lbl = ttk.Label(f, text=t("adv_low", v=80))
+        self.canny_high_lbl = ttk.Label(f, text=t("adv_high", v=180))
         self.canny_low_lbl.pack(anchor="w")
         ttk.Scale(f, from_=0, to=255, variable=self.canny_low,
                   orient="horizontal").pack(fill="x")
@@ -946,11 +1027,11 @@ class App(tk.Tk):
                   orient="horizontal").pack(fill="x")
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
-        ttk.Label(f, text="人脸检测", foreground="#666").pack(anchor="w")
+        ttk.Label(f, text=t("tool_face"), foreground="#666").pack(anchor="w")
 
         row = ttk.Frame(f)
         row.pack(fill="x", pady=(4, 0))
-        ttk.Label(row, text="灵敏度").pack(side="left")
+        ttk.Label(row, text=t("face_sensitivity")).pack(side="left")
         self.face_score_lbl = ttk.Label(row, text="0.60", width=5, anchor="e")
         self.face_score_lbl.pack(side="right")
         self.face_score = tk.DoubleVar(value=0.6)
@@ -959,34 +1040,34 @@ class App(tk.Tk):
 
         row2 = ttk.Frame(f, padding=(0, 4))
         row2.pack(fill="x")
-        ttk.Label(row2, text="最小人脸").pack(side="left")
+        ttk.Label(row2, text=t("face_min")).pack(side="left")
         self.face_min = tk.IntVar(value=30)
         ttk.Spinbox(row2, from_=10, to=2000, increment=10, width=5,
                     textvariable=self.face_min).pack(side="left", padx=3)
-        ttk.Label(row2, text="像素").pack(side="left")
+        ttk.Label(row2, text=t("face_unit_px")).pack(side="left")
 
         row3 = ttk.Frame(f, padding=(0, 2))
         row3.pack(fill="x")
-        ttk.Label(row3, text="框线宽").pack(side="left")
+        ttk.Label(row3, text=t("face_thick")).pack(side="left")
         self.face_thick = tk.IntVar(value=3)
         ttk.Spinbox(row3, from_=1, to=12, width=4,
                     textvariable=self.face_thick).pack(side="left", padx=3)
-        ttk.Button(row3, text="框颜色", width=7,
+        ttk.Button(row3, text=t("face_color"),
                    command=self._pick_face_color).pack(side="left", padx=(8, 3))
         self.face_color_swatch = tk.Label(row3, text="   ", background=self.face_color,
                                           relief="solid", borderwidth=1)
         self.face_color_swatch.pack(side="left")
 
         self.face_show_score = tk.BooleanVar(value=True)
-        ttk.Checkbutton(f, text="显示置信度数值",
+        ttk.Checkbutton(f, text=t("face_show_score"),
                         variable=self.face_show_score).pack(anchor="w")
         self.face_landmarks = tk.BooleanVar(value=False)
-        ttk.Checkbutton(f, text="标出五官关键点",
+        ttk.Checkbutton(f, text=t("face_landmarks"),
                         variable=self.face_landmarks).pack(anchor="w")
 
-        ttk.Button(f, text="预览人脸检测",
+        ttk.Button(f, text=t("face_preview"),
                    command=self.face_detect).pack(fill="x", pady=(6, 2))
-        ttk.Label(f, text="调好参数点这里预览，满意后点下面的「应用处理」。",
+        ttk.Label(f, text=t("face_hint"),
                   foreground="#666", wraplength=290,
                   justify="left").pack(anchor="w")
 
@@ -999,7 +1080,7 @@ class App(tk.Tk):
 
         ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
         self.b_adv_apply, self.b_adv_cancel = self._apply_row(
-            f, "应用处理", lambda: self.apply_slot("adv"),
+            f, t("adv_apply"), lambda: self.apply_slot("adv"),
             lambda: self.cancel_slot("adv"))
         return f
 
@@ -1009,8 +1090,8 @@ class App(tk.Tk):
             hi = int(self.canny_high.get())
         except (tk.TclError, ValueError):
             return
-        self.canny_low_lbl.configure(text=f"低阈值  {lo}")
-        self.canny_high_lbl.configure(text=f"高阈值  {hi}")
+        self.canny_low_lbl.configure(text=t("adv_low", v=lo))
+        self.canny_high_lbl.configure(text=t("adv_high", v=hi))
         if self.pending_adv is not None and self.pending_adv.get("kind") == "canny":
             self.pending_adv["lo"] = lo
             self.pending_adv["hi"] = hi
@@ -1025,7 +1106,7 @@ class App(tk.Tk):
         row.pack(fill="x")
         b_apply = ttk.Button(row, text=text, state="disabled", command=on_apply)
         b_apply.pack(side="left", expand=True, fill="x", padx=2)
-        b_cancel = ttk.Button(row, text="重置", state="disabled", command=on_cancel)
+        b_cancel = ttk.Button(row, text=t("btn_reset"), state="disabled", command=on_cancel)
         b_cancel.pack(side="left", expand=True, fill="x", padx=2)
         return b_apply, b_cancel
 
@@ -1099,7 +1180,7 @@ class App(tk.Tk):
         self._preview_gen += 1
         gen = self._preview_gen
         self._preview_running = True
-        self._busy(True, "正在预览…")
+        self._busy(True, t("previewing"))
 
         def job():
             try:
@@ -1148,9 +1229,9 @@ class App(tk.Tk):
 
         if slot == "adjust":
             if not any(params.values()):
-                self.update_status("没有需要应用的调色")
+                self.update_status(t("adj_nothing"))
                 return
-            label = "调色"
+            label = t("tab_adjust")
         elif slot == "filter":
             if filt is None:
                 return
@@ -1163,7 +1244,7 @@ class App(tk.Tk):
             return
 
         work = self.work
-        self._busy(True, f"正在应用：{label}…")
+        self._busy(True, t("applying", label=label))
 
         def job():
             info = {}
@@ -1195,7 +1276,7 @@ class App(tk.Tk):
         self.fit_window()
         self._busy(False)
         self._recompute_preview()
-        self.update_status(f"已应用：{label}" + (f"（{note}）" if note else ""))
+        self.update_status(t("applied", label=label + (f" ({note})" if note else "")))
 
     def cancel_slot(self, slot):
         if slot == "adjust":
@@ -1205,22 +1286,26 @@ class App(tk.Tk):
         elif slot == "adv":
             self.pending_adv = None
         self._recompute_preview()
-        self.update_status("已重置本页设置")
+        self.update_status(t("reset_done"))
 
     def _build_statusbar(self):
         bar = ttk.Frame(self, padding=(8, 3))
         bar.pack(side="bottom", fill="x")
-        self.status = ttk.Label(bar, text="就绪 — 请先打开一张图片", anchor="w")
+        self.status = ttk.Label(bar, text=t("status_ready"), anchor="w")
         self.status.pack(side="left")
         self.status_zoom = ttk.Label(bar, text="", anchor="e")
         self.status_zoom.pack(side="right")
 
     def _bind_events(self):
+        """窗口级快捷键。只绑一次，切换语言重建界面时不会重复累加。"""
         self.bind("<Control-o>", lambda e: self.open_image())
         self.bind("<Control-s>", lambda e: self.save())
         self.bind("<Control-S>", lambda e: self.save_as())
         self.bind("<Control-z>", lambda e: self.undo())
         self.bind("<Control-y>", lambda e: self.redo())
+
+    def _bind_canvas(self):
+        """画布上的事件。切换语言会重建画布，所以每次建完都要重新绑。"""
         self.canvas.bind("<ButtonPress-1>", self._on_press)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
@@ -1239,18 +1324,18 @@ class App(tk.Tk):
     def open_image(self, path=None):
         if path is None:
             path = filedialog.askopenfilename(
-                title="选择图片",
-                filetypes=[("图片文件", "*.jpg *.jpeg *.jfif *.png *.bmp *.webp *.tif *.tiff *.gif"),
-                           ("所有文件", "*.*")])
+                title=t("dlg_choose_image"),
+                filetypes=[(t("ft_images"), "*.jpg *.jpeg *.jfif *.png *.bmp *.webp *.tif *.tiff *.gif"),
+                           (t("ft_all"), "*.*")])
         if not path:
             return
         raw = imread_unicode(path)
         if raw is None:
-            messagebox.showerror(APP_NAME, f"无法打开图片：\n{path}")
+            messagebox.showerror(APP_NAME, t("err_open_image", path=path))
             return
         bgr, alpha = to_bgr8(raw)
         if bgr is None or bgr.size == 0:
-            messagebox.showerror(APP_NAME, "图片内容为空或格式不支持。")
+            messagebox.showerror(APP_NAME, t("err_empty_image"))
             return
 
         self.path = path
@@ -1262,7 +1347,7 @@ class App(tk.Tk):
         self.push_history()
         self.title(f"{os.path.basename(path)} — {APP_NAME}")
         self._set_controls_enabled(True)
-        self.update_status(f"已打开：{path}")
+        self.update_status(t("opened", path=path))
 
     def _set_work(self, img):
         self.work = img
@@ -1330,14 +1415,14 @@ class App(tk.Tk):
 
     def undo(self):
         if self.hist_idx <= 0:
-            self.update_status("已经是最早的状态了")
+            self.update_status(t("hist_earliest"))
             return
         self.hist_idx -= 1
         self._load_hist()
 
     def redo(self):
         if self.hist_idx >= len(self.history) - 1:
-            self.update_status("没有可重做的操作")
+            self.update_status(t("hist_no_redo"))
             return
         self.hist_idx += 1
         self._load_hist()
@@ -1362,7 +1447,7 @@ class App(tk.Tk):
         self._refresh_view_src()
         self.fit_window()
         self.push_history()
-        self.update_status("已还原到打开时的状态")
+        self.update_status(t("reverted"))
 
     # ---------------- 调色预览 ----------------
 
@@ -1391,7 +1476,7 @@ class App(tk.Tk):
             self.work = cv2.rotate(self.work, cv2.ROTATE_90_COUNTERCLOCKWISE)
         elif angle == 180:
             self.work = cv2.rotate(self.work, cv2.ROTATE_180)
-        self._after_geometry(f"旋转 {angle}°")
+        self._after_geometry(t("rotated", a=angle))
 
     def rotate_free(self, angle):
         if self.work is None:
@@ -1406,13 +1491,13 @@ class App(tk.Tk):
         border = cv2.BORDER_REPLICATE
         self.work = cv2.warpAffine(self.work, M, (nw, nh), flags=cv2.INTER_CUBIC,
                                    borderMode=border)
-        self._after_geometry(f"旋转 {angle:.1f}°")
+        self._after_geometry(t("rotated", a=f"{angle:.1f}"))
 
     def flip(self, code):
         if self.work is None:
             return
         self.work = cv2.flip(self.work, code)
-        self._after_geometry("镜像")
+        self._after_geometry(t("flipped"))
 
     def apply_resize(self):
         if self.work is None:
@@ -1421,24 +1506,24 @@ class App(tk.Tk):
             nw = int(float(self.w_var.get()))
             nh = int(float(self.h_var.get()))
         except ValueError:
-            messagebox.showwarning(APP_NAME, "宽高必须是数字")
+            messagebox.showwarning(APP_NAME, t("err_size_num"))
             return
         if nw < 1 or nh < 1:
-            messagebox.showwarning(APP_NAME, "宽高必须大于 0")
+            messagebox.showwarning(APP_NAME, t("err_size_pos"))
             return
         interp = cv2.INTER_AREA if nw * nh < self.work.shape[0] * self.work.shape[1] else cv2.INTER_CUBIC
         self.work = cv2.resize(self.work, (nw, nh), interpolation=interp)
-        self._after_geometry(f"尺寸改为 {nw}×{nh}")
+        self._after_geometry(t("resized", w=nw, h=nh))
 
     def toggle_crop(self):
         if self.work is None:
             return
         self.crop_mode = not self.crop_mode
-        self.b_crop.configure(text="退出裁剪" if self.crop_mode else "裁剪模式")
+        self.b_crop.configure(text=t("tb_crop_exit") if self.crop_mode else t("tb_crop"))
         self.config(cursor="crosshair" if self.crop_mode else "")
         if not self.crop_mode:
             self.clear_crop()
-        self.update_status("在图片上按住左键拖拽框选区域" if self.crop_mode else "已退出裁剪模式")
+        self.update_status(t("crop_hint_click") if self.crop_mode else t("crop_exited"))
 
     def clear_crop(self):
         if self.crop_item is not None:
@@ -1448,7 +1533,7 @@ class App(tk.Tk):
 
     def apply_crop(self):
         if self.work is None or self.crop_rect is None:
-            self.update_status("请先在裁剪模式下框选区域")
+            self.update_status(t("crop_need_sel"))
             return
         x0, y0, x1, y1 = self.crop_rect
         s = self.view_scale
@@ -1458,11 +1543,11 @@ class App(tk.Tk):
         ix0, ix1 = max(0, min(ix0, iw - 1)), max(1, min(ix1, iw))
         iy0, iy1 = max(0, min(iy0, ih - 1)), max(1, min(iy1, ih))
         if ix1 - ix0 < 2 or iy1 - iy0 < 2:
-            messagebox.showwarning(APP_NAME, "选区太小了")
+            messagebox.showwarning(APP_NAME, t("crop_too_small"))
             return
         self.work = self.work[iy0:iy1, ix0:ix1].copy()
         self.clear_crop()
-        self._after_geometry(f"裁剪为 {ix1 - ix0}×{iy1 - iy0}")
+        self._after_geometry(t("cropped", w=ix1 - ix0, h=iy1 - iy0))
 
     def _after_geometry(self, msg):
         self.push_history()
@@ -1490,8 +1575,8 @@ class App(tk.Tk):
         if self.work is None:
             return
         if not os.path.exists(face_model_path()):
-            messagebox.showerror(APP_NAME, "找不到人脸检测模型文件：\n"
-                                 + face_model_path())
+            messagebox.showerror(APP_NAME,
+                                 t("face_no_model", path=face_model_path()))
             return
         self.set_adv({
             "kind": "face",
@@ -1523,7 +1608,7 @@ class App(tk.Tk):
 
     def _fail(self, err):
         self._busy(False)
-        messagebox.showerror(APP_NAME, f"操作失败：\n{err}")
+        messagebox.showerror(APP_NAME, t("err_fail", err=err))
 
     def _busy(self, on, msg=None):
         self.config(cursor="watch" if on else "")
@@ -1562,7 +1647,7 @@ class App(tk.Tk):
         if self.work is not None:
             wh, ww = self.work.shape[:2]
             self.status_zoom.configure(
-                text=f"缩放 {self.zoom * 100:.0f}%   原图 {ww}×{wh}")
+                text=t("status_zoom", z=f"{self.zoom * 100:.0f}", w=ww, h=wh))
 
     def _recenter(self):
         """图片比可视区域小时居中显示：宽图左右居中，高图上下居中，两个方向都居中"""
@@ -1663,7 +1748,8 @@ class App(tk.Tk):
             self.crop_rect = (vx0, vy0, vx1, vy1)
             self.crop_start = None
             self.update_status(
-                f"已框选 {int((x1 - x0) / self.zoom)}×{int((y1 - y0) / self.zoom)} 像素，点「应用裁剪」")
+                t("crop_selected", w=int((x1 - x0) / self.zoom),
+                                  h=int((y1 - y0) / self.zoom)))
 
     # ---------------- 保存 ----------------
 
@@ -1677,15 +1763,15 @@ class App(tk.Tk):
     def save_as(self):
         if self.work is None:
             return
-        init = os.path.basename(self.path) if self.path else "未命名.jpg"
-        types = [(desc, f"*.{e}") for e, desc, _, _ in IMAGE_FORMATS]
-        types.append(("所有文件", "*.*"))
+        init = os.path.basename(self.path) if self.path else t("untitled")
+        types = [(t(key), f"*.{e}") for e, key, _, _ in IMAGE_FORMATS]
+        types.append((t("ft_all"), "*.*"))
 
         cur = os.path.splitext(self.path)[1].lower().lstrip(".") if self.path else ""
         default_ext = cur if cur in FORMAT_EXT else "jpg"
 
         path = filedialog.asksaveasfilename(
-            title="另存为", initialfile=init,
+            title=t("tb_save_as"), initialfile=init,
             defaultextension="." + default_ext,
             filetypes=types)
         if not path:
@@ -1702,11 +1788,10 @@ class App(tk.Tk):
             img = self._with_alpha(img)
         ok = imwrite_unicode(path, img, quality=self.save_quality)
         if ok:
-            self.update_status(f"已保存：{path}")
+            self.update_status(t("saved", path=path))
         else:
             messagebox.showerror(
-                APP_NAME, f"保存失败。\n\n可能是该格式无法保存当前图像"
-                          f"（比如把带透明的图存成 {name.upper()}）。")
+                APP_NAME, t("save_failed", fmt=name.upper()))
         return ok
 
     def _with_alpha(self, img):
@@ -1719,12 +1804,11 @@ class App(tk.Tk):
     def ask_save_quality(self):
         from tkinter import simpledialog
         q = simpledialog.askinteger(
-            "保存质量", "有损格式（JPEG / WebP / AVIF / JPEG 2000）的保存质量：\n"
-                        "数值越大越清晰，文件也越大（1-100，当前 %d）" % self.save_quality,
+            t("dlg_quality"), t("quality_hint_raw") % self.save_quality,
             parent=self, initialvalue=self.save_quality, minvalue=1, maxvalue=100)
         if q:
             self.save_quality = int(q)
-            self.update_status(f"保存质量已设为 {self.save_quality}")
+            self.update_status(t("quality_set", q=self.save_quality))
 
     # ---------------- 状态 / 帮助 ----------------
 
@@ -1733,24 +1817,18 @@ class App(tk.Tk):
             self.status.configure(text=msg)
         elif self.work is not None:
             h, w = self.work.shape[:2]
-            self.status.configure(text=f"尺寸 {w}×{h}   通道 {self.work.shape[2]}")
+            self.status.configure(text=t("status_size", w=w, h=h,
+                                                 c=self.work.shape[2]))
 
     def show_help(self):
         messagebox.showinfo(
-            "使用说明",
-            "1. 「打开」选择一张图片，滚轮缩放，按住左键拖动可平移。\n"
-            "2. 左侧「调色」拖动滑块实时预览，满意后点「应用调整」。\n"
-            "3. 「几何」可旋转、镜像、改尺寸；点「裁剪模式」后在图上拖拽框选，再点「应用裁剪」。\n"
-            "4. 「高级」里有一键自动增强、边缘检测、人脸检测。\n"
-            "5. 「批量」可对整个文件夹做缩放 / 转格式 / 加水印。\n"
-            "6. Ctrl+Z 撤销，Ctrl+Y 重做，Ctrl+S 保存。")
+            t("menu_help_usage"),
+            t("help"))
 
     def show_about(self):
         messagebox.showinfo(
-            "关于",
-            f"{APP_NAME}  v{APP_VERSION}\n\n"
-            f"基于 OpenCV {cv2.__version__} 与 Python 构建\n"
-            "本机离线运行，不联网、不上传任何图片。")
+            t("menu_about"),
+            t("about", name=APP_NAME, ver=APP_VERSION, cv=cv2.__version__))
 
     # ---------------- 批量处理 ----------------
 
@@ -1772,7 +1850,7 @@ class BatchPanel(ttk.Frame):
         self.recursive = tk.BooleanVar(value=True)
 
         self.do_resize = tk.BooleanVar(value=True)
-        self.resize_mode = tk.StringVar(value="width")
+        self.resize_mode = tk.StringVar(value=t("mode_w"))
         self.resize_value = tk.StringVar(value="1920")
 
         self.do_convert = tk.BooleanVar(value=False)
@@ -1780,8 +1858,8 @@ class BatchPanel(ttk.Frame):
         self.quality = tk.IntVar(value=92)
 
         self.do_watermark = tk.BooleanVar(value=False)
-        self.wm_text = tk.StringVar(value="© 我的水印")
-        self.wm_pos = tk.StringVar(value="右下角")
+        self.wm_text = tk.StringVar(value=t("wm_default"))
+        self.wm_pos = tk.StringVar(value=t("pos_br"))
         self.wm_opacity = tk.IntVar(value=45)
         self.wm_size = tk.IntVar(value=36)
         self.wm_color = "#FFFFFF"
@@ -1829,7 +1907,7 @@ class BatchPanel(ttk.Frame):
             if b is not None:
                 b.configure(state="normal" if running else "disabled")
         if getattr(self, "btn_pause", None) is not None:
-            self.btn_pause.configure(text="暂停")
+            self.btn_pause.configure(text=t("btn_pause"))
         self.update_status()
 
     # 下面三个是后台线程经队列回调进来的，必须防着页面已经没了
@@ -1860,10 +1938,10 @@ class BatchPanel(ttk.Frame):
         except tk.TclError:
             return
         if stopped:
-            self._log(f"—— 已停止：成功 {ok} 张，失败 {fail} 张 ——")
+            self._log(t("log_stopped", ok=ok, fail=fail))
             return
-        self._log(f"—— 处理结束：成功 {ok} 张，失败 {fail} 张 ——")
-        messagebox.showinfo("批量处理", f"处理完成\n成功 {ok} 张，失败 {fail} 张",
+        self._log(t("log_finished", ok=ok, fail=fail))
+        messagebox.showinfo(t("done_title"), t("done_msg", ok=ok, fail=fail),
                             parent=self)
 
     def _toggle_pause(self):
@@ -1871,12 +1949,12 @@ class BatchPanel(ttk.Frame):
             return
         if self._pause.is_set():
             self._pause.clear()
-            self.btn_pause.configure(text="暂停")
-            self._log("▶ 继续处理")
+            self.btn_pause.configure(text=t("btn_pause"))
+            self._log(t("log_resume"))
         else:
             self._pause.set()
-            self.btn_pause.configure(text="继续")
-            self._log("⏸ 已暂停（点「继续」接着做）")
+            self.btn_pause.configure(text=t("btn_resume"))
+            self._log(t("log_paused"))
         self.update_status()
 
     def _stop_now(self):
@@ -1884,7 +1962,7 @@ class BatchPanel(ttk.Frame):
             return
         self._stop.set()
         self._pause.clear()
-        self._log("■ 正在停止……当前这张做完就停")
+        self._log(t("log_stopping"))
         self.btn_pause.configure(state="disabled")
 
     def update_status(self):
@@ -1892,19 +1970,18 @@ class BatchPanel(ttk.Frame):
             return
         try:
             if self._pause.is_set():
-                self.lbl_state.configure(text="已暂停")
+                self.lbl_state.configure(text=t("state_paused"))
             elif self._running:
                 self.lbl_state.configure(
-                    text=f"处理中 {self._done_count}/{self._total}")
+                    text=t("state_running", done=self._done_count, total=self._total))
             else:
-                self.lbl_state.configure(text="就绪")
+                self.lbl_state.configure(text=t("state_ready"))
         except tk.TclError:
             pass
 
     def _build(self):
         ttk.Label(self,
-                  text="对一整个文件夹的图片批量做缩放 / 转格式 / 加水印。"
-                       "三种处理可以叠加，结果输出到单独的文件夹，不改动原图。",
+                  text=t("batch_desc"),
                   foreground="#666").pack(anchor="w", pady=(0, 8))
 
         # ---- 上半部分：左右两栏 ----
@@ -1914,46 +1991,46 @@ class BatchPanel(ttk.Frame):
         top.columnconfigure(1, weight=1, uniform="col")
 
         # 左：文件夹
-        f1 = ttk.LabelFrame(top, text="文件夹", padding=10)
+        f1 = ttk.LabelFrame(top, text=t("grp_folders"), padding=10)
         f1.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
 
         r = ttk.Frame(f1)
         r.pack(fill="x")
-        ttk.Label(r, text="源文件夹", width=9).pack(side="left")
+        ttk.Label(r, text=t("lbl_src"), width=9).pack(side="left")
         ttk.Entry(r, textvariable=self.src_dir).pack(side="left", fill="x", expand=True)
-        ttk.Button(r, text="浏览…", command=self.pick_src).pack(side="left", padx=(6, 0))
+        ttk.Button(r, text=t("btn_browse"), command=self.pick_src).pack(side="left", padx=(6, 0))
 
         r = ttk.Frame(f1, padding=(0, 6))
         r.pack(fill="x")
-        ttk.Label(r, text="输出到", width=9).pack(side="left")
+        ttk.Label(r, text=t("lbl_dst"), width=9).pack(side="left")
         ttk.Entry(r, textvariable=self.dst_dir).pack(side="left", fill="x", expand=True)
-        ttk.Button(r, text="浏览…", command=self.pick_dst).pack(side="left", padx=(6, 0))
+        ttk.Button(r, text=t("btn_browse"), command=self.pick_dst).pack(side="left", padx=(6, 0))
 
-        ttk.Checkbutton(f1, text="包含子文件夹（输出目录会被自动跳过）",
+        ttk.Checkbutton(f1, text=t("chk_recursive"),
                         variable=self.recursive).pack(anchor="w", pady=(4, 0))
 
         # 右：处理选项
-        f2 = ttk.LabelFrame(top, text="要做的处理（可多选）", padding=10)
+        f2 = ttk.LabelFrame(top, text=t("grp_ops"), padding=10)
         f2.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
 
         r = ttk.Frame(f2)
         r.pack(fill="x")
-        ttk.Checkbutton(r, text="缩放", variable=self.do_resize).pack(side="left")
-        ttk.Combobox(r, textvariable=self.resize_mode, width=9, state="readonly",
-                     values=("按宽度", "按高度", "按百分比")).pack(side="left", padx=4)
+        ttk.Checkbutton(r, text=t("chk_resize"), variable=self.do_resize).pack(side="left")
+        ttk.Combobox(r, textvariable=self.resize_mode, width=11, state="readonly",
+                     values=resize_mode_values()).pack(side="left", padx=4)
         ttk.Entry(r, textvariable=self.resize_value, width=8).pack(side="left")
-        ttk.Label(r, text="像素 / %").pack(side="left", padx=4)
+        ttk.Label(r, text=t("unit_px_pct")).pack(side="left", padx=4)
 
         r = ttk.Frame(f2, padding=(0, 6))
         r.pack(fill="x")
-        ttk.Checkbutton(r, text="转格式", variable=self.do_convert).pack(side="left")
+        ttk.Checkbutton(r, text=t("chk_convert"), variable=self.do_convert).pack(side="left")
         ttk.Combobox(r, textvariable=self.target_fmt, width=6, state="readonly",
                      values=FORMAT_EXT).pack(side="left", padx=4)
-        self.lbl_fmt = ttk.Label(r, text=FORMAT_DESC.get("jpg", ""), foreground="#666")
+        self.lbl_fmt = ttk.Label(r, text=t(FORMAT_DESC.get("jpg", "")), foreground="#666")
         self.lbl_fmt.pack(side="left", padx=4)
         self.target_fmt.trace_add("write", lambda *a: self.lbl_fmt.configure(
-            text=FORMAT_DESC.get(self.target_fmt.get(), "")))
-        ttk.Label(r, text="质量").pack(side="left", padx=(8, 2))
+            text=t(FORMAT_DESC.get(self.target_fmt.get(), ""))))
+        ttk.Label(r, text=t("lbl_quality")).pack(side="left", padx=(8, 2))
         ttk.Scale(r, from_=1, to=100, variable=self.quality, orient="horizontal",
                   length=100).pack(side="left")
         self.lbl_q = ttk.Label(r, text="92", width=3)
@@ -1963,42 +2040,42 @@ class BatchPanel(ttk.Frame):
 
         r = ttk.Frame(f2, padding=(0, 6))
         r.pack(fill="x")
-        ttk.Checkbutton(r, text="加水印", variable=self.do_watermark).pack(side="left")
+        ttk.Checkbutton(r, text=t("chk_watermark"), variable=self.do_watermark).pack(side="left")
         ttk.Entry(r, textvariable=self.wm_text, width=14).pack(side="left", padx=4)
-        ttk.Button(r, text="颜色", width=6, command=self.pick_color).pack(side="left", padx=4)
+        ttk.Button(r, text=t("btn_color"), width=6, command=self.pick_color).pack(side="left", padx=4)
         self.lbl_color = ttk.Label(r, text="   ", background=self.wm_color,
                                    relief="solid", borderwidth=1)
         self.lbl_color.pack(side="left")
 
         r = ttk.Frame(f2, padding=(0, 2))
         r.pack(fill="x")
-        ttk.Label(r, text="位置").pack(side="left", padx=(0, 4))
-        ttk.Combobox(r, textvariable=self.wm_pos, width=8, state="readonly",
-                     values=("左上角", "右上角", "左下角", "右下角", "居中")).pack(side="left")
-        ttk.Label(r, text="字号").pack(side="left", padx=(8, 2))
+        ttk.Label(r, text=t("lbl_pos")).pack(side="left", padx=(0, 4))
+        ttk.Combobox(r, textvariable=self.wm_pos, width=11, state="readonly",
+                     values=wm_position_values()).pack(side="left")
+        ttk.Label(r, text=t("lbl_font_size")).pack(side="left", padx=(8, 2))
         ttk.Spinbox(r, from_=8, to=300, textvariable=self.wm_size, width=5).pack(side="left")
-        ttk.Label(r, text="透明度").pack(side="left", padx=(8, 2))
+        ttk.Label(r, text=t("lbl_opacity")).pack(side="left", padx=(8, 2))
         ttk.Scale(r, from_=0, to=100, variable=self.wm_opacity, orient="horizontal",
                   length=80).pack(side="left")
 
         # ---- 任务控制 ----
-        f3 = ttk.LabelFrame(self, text="任务", padding=10)
+        f3 = ttk.LabelFrame(self, text=t("grp_task"), padding=10)
         f3.pack(fill="x", pady=(10, 0))
-        self.btn_run = ttk.Button(f3, text="开始处理", width=10, command=self.start)
+        self.btn_run = ttk.Button(f3, text=t("btn_start"), width=10, command=self.start)
         self.btn_run.grid(row=0, column=0, padx=(0, 4))
-        self.btn_pause = ttk.Button(f3, text="暂停", width=8, command=self._toggle_pause)
+        self.btn_pause = ttk.Button(f3, text=t("btn_pause"), width=8, command=self._toggle_pause)
         self.btn_pause.grid(row=0, column=1, padx=4)
-        self.btn_stop = ttk.Button(f3, text="停止", width=8, command=self._stop_now)
+        self.btn_stop = ttk.Button(f3, text=t("btn_stop"), width=8, command=self._stop_now)
         self.btn_stop.grid(row=0, column=2, padx=4)
         f3.columnconfigure(3, weight=1)
-        self.lbl_state = ttk.Label(f3, text="就绪", width=16)
+        self.lbl_state = ttk.Label(f3, text=t("state_ready"), width=16)
         self.lbl_state.grid(row=0, column=4, sticky="e")
 
         self.progress = ttk.Progressbar(f3, mode="determinate")
         self.progress.grid(row=1, column=0, columnspan=5, sticky="ew", pady=(8, 0))
 
         # ---- 处理记录 ----
-        f4 = ttk.LabelFrame(self, text="处理记录", padding=6)
+        f4 = ttk.LabelFrame(self, text=t("grp_log"), padding=6)
         f4.pack(fill="both", expand=True, pady=(10, 0))
         self.log = tk.Text(f4, height=8, state="disabled", wrap="word")
         sb = ttk.Scrollbar(f4, orient="vertical", command=self.log.yview)
@@ -2007,14 +2084,14 @@ class BatchPanel(ttk.Frame):
         sb.pack(side="right", fill="y")
 
     def pick_src(self):
-        d = filedialog.askdirectory(title="选择源文件夹")
+        d = filedialog.askdirectory(title=t("dlg_choose_src"))
         if d:
             self.src_dir.set(d)
             if not self.dst_dir.get():
                 self.dst_dir.set(os.path.join(d, "output"))
 
     def pick_dst(self):
-        d = filedialog.askdirectory(title="选择输出文件夹")
+        d = filedialog.askdirectory(title=t("dlg_choose_dst"))
         if d:
             self.dst_dir.set(d)
 
@@ -2028,7 +2105,7 @@ class BatchPanel(ttk.Frame):
         src = self.src_dir.get().strip()
         dst = self.dst_dir.get().strip()
         if not src or not os.path.isdir(src):
-            messagebox.showwarning("批量处理", "请选择有效的源文件夹", parent=self)
+            messagebox.showwarning(t("batch_title"), t("warn_no_src"), parent=self)
             return
         if not dst:
             dst = os.path.join(src, "output")
@@ -2036,15 +2113,15 @@ class BatchPanel(ttk.Frame):
         try:
             os.makedirs(dst, exist_ok=True)
         except Exception as e:
-            messagebox.showerror("批量处理", f"无法创建输出文件夹：\n{e}", parent=self)
+            messagebox.showerror(t("batch_title"), t("err_makedirs", err=e), parent=self)
             return
 
         files = self.collect(src)
         if not files:
-            messagebox.showinfo("批量处理", "该文件夹里没有找到图片", parent=self)
+            messagebox.showinfo(t("batch_title"), t("info_no_images"), parent=self)
             return
 
-        if not messagebox.askyesno("批量处理", f"共找到 {len(files)} 张图片，开始处理？",
+        if not messagebox.askyesno(t("batch_title"), t("confirm_start", n=len(files)),
                                    parent=self):
             return
 
@@ -2054,7 +2131,7 @@ class BatchPanel(ttk.Frame):
         self._total = len(files)
         self._done_count = 0
         self.progress.configure(maximum=len(files), value=0)
-        self._log(f"开始处理，共 {len(files)} 张")
+        self._log(t("log_start", n=len(files)))
         self._set_running(True)
 
         cfg = self.snapshot()
@@ -2080,14 +2157,14 @@ class BatchPanel(ttk.Frame):
     def snapshot(self):
         return {
             "resize": self.do_resize.get(),
-            "mode": self.resize_mode.get(),
+            "mode": _display_to_id(self.resize_mode.get(), RESIZE_MODES, "w"),
             "value": self.resize_value.get(),
             "convert": self.do_convert.get(),
             "fmt": self.target_fmt.get(),
             "quality": int(self.quality.get()),
             "watermark": self.do_watermark.get(),
             "text": self.wm_text.get(),
-            "pos": self.wm_pos.get(),
+            "pos": _display_to_id(self.wm_pos.get(), WM_POSITIONS, "br"),
             "opacity": int(self.wm_opacity.get()),
             "size": int(self.wm_size.get()),
             "color": self.wm_color,
@@ -2111,7 +2188,7 @@ class BatchPanel(ttk.Frame):
                 raw = imread_unicode(fp)
                 img, alpha = to_bgr8(raw)
                 if img is None:
-                    raise ValueError("无法读取")
+                    raise ValueError(t("err_read"))
 
                 if cfg["resize"]:
                     img = self._resize(img, cfg)
@@ -2135,13 +2212,14 @@ class BatchPanel(ttk.Frame):
                     img = np.dstack([img, alpha])
 
                 if not imwrite_unicode(out_path, img, ext=ext, quality=cfg["quality"]):
-                    raise ValueError("写入失败")
+                    raise ValueError(t("err_write"))
                 ok += 1
-                self.post(lambda m=f"[{i}/{total}] 完成：{os.path.basename(fp)}":
+                self.post(lambda m=t("log_ok", i=i, n=total, name=os.path.basename(fp)):
                           self._log(m))
             except Exception as e:
                 fail += 1
-                self.post(lambda m=f"[{i}/{total}] 失败：{os.path.basename(fp)} — {e}":
+                self.post(lambda m=t("log_fail", i=i, n=total,
+                                    name=os.path.basename(fp), err=e):
                           self._log(m))
 
             self._done_count = i
@@ -2157,10 +2235,10 @@ class BatchPanel(ttk.Frame):
         except ValueError:
             return img
         mode = cfg["mode"]
-        if mode == "按宽度":
+        if mode == "w":
             nw = max(1, int(v))
             nh = max(1, int(h * nw / w))
-        elif mode == "按高度":
+        elif mode == "h":
             nh = max(1, int(v))
             nw = max(1, int(w * nh / h))
         else:
@@ -2191,13 +2269,13 @@ class BatchPanel(ttk.Frame):
 
         m = max(10, int(min(w, h) * 0.02))
         pos = cfg["pos"]
-        if pos == "左上角":
+        if pos == "tl":
             xy = (m, m)
-        elif pos == "右上角":
+        elif pos == "tr":
             xy = (w - tw - m, m)
-        elif pos == "左下角":
+        elif pos == "bl":
             xy = (m, h - th - m * 2)
-        elif pos == "居中":
+        elif pos == "c":
             xy = ((w - tw) // 2, (h - th) // 2)
         else:
             xy = (w - tw - m, h - th - m * 2)
@@ -2222,6 +2300,8 @@ def main():
         cv2.setNumThreads(max(1, (os.cpu_count() or 4) - 1))
     except Exception:
         pass
+    # 界面文字用哪种语言：优先用用户上次手动选过的，否则跟随系统
+    init_language()
     app = App()
     app.mainloop()
 

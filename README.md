@@ -49,6 +49,7 @@ Resize, convert format, and watermark an entire folder. The three operations sta
 
 ### Other
 
+- **Bilingual interface** — Simplified Chinese and English. It follows your system language automatically, and you can switch any time from the **Language** menu; your choice is remembered
 - Each panel has its **own Apply / Reset** — changes in one panel never affect another
 - Undo / redo (20 steps)
 - Hold **"View original"** to compare at any time
