@@ -1,0 +1,20 @@
+# 统一换行符：文本文件在仓库里一律用 LF
+# 这是必须的 —— build_mac.sh 是给 macOS 跑的，
+# 如果带上 Windows 的 CRLF，Mac 上会报 "bad interpreter" 直接跑不起来。
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.txt  text eol=lf
+*.md   text eol=lf
+
+# 二进制文件不要做任何换行转换
+*.ico   binary
+*.icns  binary
+*.png   binary
+*.onnx  binary
+*.jpg   binary
+*.dmg   binary
+*.zip   binary

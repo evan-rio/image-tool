@@ -1,0 +1,4 @@
+# 图片处理软件 —— 运行依赖（Windows / macOS / Linux 通用）
+opencv-python>=4.8
+Pillow>=10.0
+pyinstaller>=6.0
