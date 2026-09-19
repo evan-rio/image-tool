@@ -79,6 +79,7 @@ STRINGS = {
         "tool_face": "人脸检测",
         "tool_canny": "边缘检测 {lo}/{hi}",
         "tool_preview": "预览",
+        "tool_enhance": "画质增强",
 
         # ---- 菜单 ----
         "menu_file": "文件",
@@ -146,6 +147,18 @@ STRINGS = {
         "tab_filter": "滤镜",
         "filter_hint": "点一下即可预览，不会立刻改动原图。",
         "filter_apply": "应用滤镜",
+
+        # ---- 增强 ----
+        "tab_enhance": "增强",
+        "enh_sec_clean": "降噪与锐化",
+        "enh_sec_tone": "对比与氛围",
+        "enh_denoise": "降噪",
+        "enh_sharpen": "锐化细节",
+        "enh_clahe": "局部对比度",
+        "enh_vignette": "暗角",
+        "enh_apply": "应用增强",
+        "enh_nothing": "四个参数都是 0，没有可应用的效果。",
+        "enh_hint": "拖动滑块实时预览，点「应用增强」才会写入图片。",
 
         # ---- 几何 ----
         "tab_geometry": "几何",
@@ -357,6 +370,7 @@ STRINGS = {
         "tool_face": "Face detection",
         "tool_canny": "Edge detection {lo}/{hi}",
         "tool_preview": "Preview",
+        "tool_enhance": "Image enhance",
 
         "menu_file": "File",
         "menu_open": "Open image…",
@@ -419,6 +433,17 @@ STRINGS = {
         "tab_filter": "Filters",
         "filter_hint": "Click a filter to preview it — your image is not changed yet.",
         "filter_apply": "Apply filter",
+
+        "tab_enhance": "Enhance",
+        "enh_sec_clean": "Denoise & sharpen",
+        "enh_sec_tone": "Contrast & mood",
+        "enh_denoise": "Denoise",
+        "enh_sharpen": "Sharpen / detail",
+        "enh_clahe": "Local contrast",
+        "enh_vignette": "Vignette",
+        "enh_apply": "Apply enhance",
+        "enh_nothing": "All four values are 0 — nothing to apply.",
+        "enh_hint": "Drag a slider to preview; click Apply to write the changes into the image.",
 
         "tab_geometry": "Geometry",
         "geo_hint": "These take effect immediately.\nIf you don't like the result, use Undo or Ctrl+Z.",

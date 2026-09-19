@@ -352,6 +352,44 @@ def apply_adjustments(img, p):
     return out
 
 
+def apply_enhance(img, spec):
+    """「画质增强」面板：降噪 -> 锐化 -> 局部对比度 -> 暗角。
+
+    spec 是普通字典（不含 Tk 对象），可安全地在后台线程里调用。
+    四个参数都是 0..100 的整数，0 表示跳过该步。
+    """
+    out = img
+
+    d = int(spec.get("denoise", 0))
+    if d > 0:
+        h = 3.0 + d / 100.0 * 15.0
+        out = cv2.fastNlMeansDenoisingColored(out, None, h, h, 7, 21)
+
+    s = int(spec.get("sharpen", 0))
+    if s > 0:
+        amt = s / 100.0 * 1.8
+        blurred = cv2.GaussianBlur(out, (0, 0), 3)
+        out = cv2.addWeighted(out, 1 + amt, blurred, -amt, 0)
+
+    c = int(spec.get("clahe", 0))
+    if c > 0:
+        lab = cv2.cvtColor(out, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=1.0 + c / 100.0 * 4.0, tileGridSize=(8, 8))
+        out = cv2.cvtColor(cv2.merge([clahe.apply(l), a, b]), cv2.COLOR_LAB2BGR)
+
+    v = int(spec.get("vignette", 0))
+    if v > 0:
+        hh, ww = out.shape[:2]
+        yy, xx = np.ogrid[:hh, :ww]
+        cy, cx = (hh - 1) / 2.0, (ww - 1) / 2.0
+        r2 = (((xx - cx) / max(cx, 1.0)) ** 2 + ((yy - cy) / max(cy, 1.0)) ** 2)
+        mask = np.clip(1.0 - v / 100.0 * r2, 0.0, 1.0).astype(np.float32)
+        out = np.clip(out.astype(np.float32) * mask[:, :, None], 0, 255).astype(np.uint8)
+
+    return out
+
+
 # --------------------------------------------------------------------------
 # 滤镜（一次性应用到整图）
 # --------------------------------------------------------------------------
@@ -589,6 +627,9 @@ def apply_tool(img, spec, info=None):
         fn = FILTER_MAP.get(spec.get("name"))
         return fn(img) if fn is not None else img
 
+    if kind == "enhance":
+        return apply_enhance(img, spec)
+
     if kind == "canny":
         lo = int(spec.get("lo", 80))
         hi = int(spec.get("hi", 180))
@@ -624,6 +665,8 @@ def tool_label(spec):
         return t("tool_canny", lo=spec.get("lo"), hi=spec.get("hi"))
     if kind == "auto":
         return t("tool_auto")
+    if kind == "enhance":
+        return t("tool_enhance")
     if kind == "face":
         return t("tool_face")
     return t("tool_preview")
@@ -668,6 +711,7 @@ class App(tk.Tk):
 
         self.pending_filter = None      # 「滤镜」页待应用的滤镜
         self.pending_adv = None         # 「高级」页待应用的处理（Canny / 自动增强）
+        self.pending_enhance = None     # 「增强」页待应用的处理（降噪 / 锐化 / 局部对比度 / 暗角）
         self._preview_gen = 0           # 防止过期的后台结果覆盖新画面
         self._preview_running = False
         self._preview_dirty = False
@@ -864,6 +908,7 @@ class App(tk.Tk):
 
         nb.add(self._tab_adjust(nb), text=t("tab_adjust"))
         nb.add(self._tab_filter(nb), text=t("tool_filter"))
+        nb.add(self._tab_enhance(nb), text=t("tab_enhance"))
         nb.add(self._tab_geometry(nb), text=t("tab_geometry"))
         nb.add(self._tab_advanced(nb), text=t("menu_advanced"))
 
@@ -951,6 +996,44 @@ class App(tk.Tk):
         self.param_vars[key] = var
         self.param_labels[key] = val
         self.param_scales[key] = s
+
+    def _enh_slider_row(self, parent, label, key, lo, hi):
+        """和 _slider_row 同款，但存进 enh_* 容器、走「增强」这一路"""
+        row = ttk.Frame(parent, padding=(0, 3))
+        row.pack(fill="x")
+        top = ttk.Frame(row)
+        top.pack(fill="x")
+        ttk.Label(top, text=label, width=12, anchor="w").pack(side="left")
+        val = ttk.Label(top, text="0", width=5, anchor="e")
+        val.pack(side="right")
+        var = tk.DoubleVar(value=0)
+        s = ttk.Scale(row, from_=lo, to=hi, variable=var, orient="horizontal",
+                      command=lambda v, k=key, lb=val: self._on_enhance_slider(k, v, lb))
+        s.pack(fill="x")
+        self.enh_vars[key] = var
+        self.enh_labels[key] = val
+        self.enh_scales[key] = s
+
+    def _tab_enhance(self, nb):
+        self.enh_vars = {}
+        self.enh_labels = {}
+        self.enh_scales = {}
+        f = ttk.Frame(nb, padding=8)
+
+        ttk.Label(f, text=t("enh_sec_clean"), foreground="#666").pack(anchor="w")
+        self._enh_slider_row(f, t("enh_denoise"), "denoise", 0, 100)
+        self._enh_slider_row(f, t("enh_sharpen"), "sharpen", 0, 100)
+
+        ttk.Separator(f, orient="horizontal").pack(fill="x", pady=6)
+        ttk.Label(f, text=t("enh_sec_tone"), foreground="#666").pack(anchor="w")
+        self._enh_slider_row(f, t("enh_clahe"), "clahe", 0, 100)
+        self._enh_slider_row(f, t("enh_vignette"), "vignette", 0, 100)
+
+        ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
+        self.b_enh_apply, self.b_enh_cancel = self._apply_row(
+            f, t("enh_apply"), lambda: self.apply_slot("enhance"),
+            lambda: self.cancel_slot("enhance"), hint=t("enh_hint"))
+        return f
 
     def _tab_adjust(self, nb):
         self.param_vars = {}
@@ -1174,6 +1257,14 @@ class App(tk.Tk):
                 self.param_vars[k].set(0)
                 self.param_labels[k].configure(text="0")
 
+    def _reset_enhance_silent(self):
+        """把「增强」页的滑块归零并清掉待处理项"""
+        for k, var in getattr(self, "enh_vars", {}).items():
+            var.set(0)
+            if k in getattr(self, "enh_labels", {}):
+                self.enh_labels[k].configure(text="0")
+        self.pending_enhance = None
+
     def _update_bars(self):
         """每个功能区只根据自己的待处理状态启用各自的按钮"""
         def pair(b, c, active):
@@ -1189,9 +1280,11 @@ class App(tk.Tk):
              self.pending_filter is not None)
         pair(getattr(self, "b_adv_apply", None), getattr(self, "b_adv_cancel", None),
              self.pending_adv is not None)
+        pair(getattr(self, "b_enh_apply", None), getattr(self, "b_enh_cancel", None),
+             self.pending_enhance is not None)
 
     # ---------------- 预览流水线 ----------------
-    # 显示效果 = 原图 -> 滤镜 -> 高级处理 -> 调色，三段各自独立待应用
+    # 显示效果 = 原图 -> 滤镜 -> 高级处理 -> 画质增强 -> 调色，各区各自独立待应用
 
     def _schedule_preview(self, delay=40):
         if self._preview_job:
@@ -1207,9 +1300,10 @@ class App(tk.Tk):
 
         filt = dict(self.pending_filter) if self.pending_filter else None
         adv = dict(self.pending_adv) if self.pending_adv else None
+        enh = dict(self.pending_enhance) if self.pending_enhance else None
         params = dict(self.params)
 
-        if filt is None and adv is None:
+        if filt is None and adv is None and enh is None:
             # 只有调色时同步计算，保证拖滑块跟手
             self.preview = (apply_adjustments(self.view_src, params)
                             if any(params.values()) else None)
@@ -1234,6 +1328,8 @@ class App(tk.Tk):
                     img = apply_tool(img, filt)
                 if adv is not None:
                     img = apply_tool(img, adv)
+                if enh is not None:
+                    img = apply_tool(img, enh)
                 if any(params.values()):
                     img = apply_adjustments(img, params)
             except Exception as e:
@@ -1264,12 +1360,17 @@ class App(tk.Tk):
         self.pending_adv = dict(spec)
         self._recompute_preview()
 
+    def set_enhance(self, spec):
+        self.pending_enhance = dict(spec)
+        self._recompute_preview()
+
     def apply_slot(self, slot):
         """只把指定功能区预览到的效果固化到全分辨率图像，其它区不受影响"""
         if self.work is None:
             return
         filt = dict(self.pending_filter) if self.pending_filter else None
         adv = dict(self.pending_adv) if self.pending_adv else None
+        enh = dict(self.pending_enhance) if self.pending_enhance else None
         params = dict(self.params)
 
         if slot == "adjust":
@@ -1285,6 +1386,12 @@ class App(tk.Tk):
             if adv is None:
                 return
             label = tool_label(adv)
+        elif slot == "enhance":
+            if enh is None or not any(enh.get(k, 0) for k in
+                                      ("denoise", "sharpen", "clahe", "vignette")):
+                self.update_status(t("enh_nothing"))
+                return
+            label = tool_label(enh)
         else:
             return
 
@@ -1298,6 +1405,8 @@ class App(tk.Tk):
                     out = apply_tool(work, filt)
                 elif slot == "adv":
                     out = apply_tool(work, adv, info)
+                elif slot == "enhance":
+                    out = apply_tool(work, enh, info)
                 else:
                     out = apply_adjustments(work, params)
             except Exception as e:
@@ -1317,6 +1426,8 @@ class App(tk.Tk):
             self.pending_filter = None
         elif slot == "adv":
             self.pending_adv = None
+        elif slot == "enhance":
+            self._reset_enhance_silent()
         self._refresh_view_src(clear_pending=False)
         self.fit_window()
         self._busy(False)
@@ -1330,6 +1441,8 @@ class App(tk.Tk):
             self.pending_filter = None
         elif slot == "adv":
             self.pending_adv = None
+        elif slot == "enhance":
+            self._reset_enhance_silent()
         self._recompute_preview()
         self.update_status(t("reset_done"))
 
@@ -1409,6 +1522,7 @@ class App(tk.Tk):
             self.pending_filter = None
             self.pending_adv = None
             self._reset_params_silent()
+            self._reset_enhance_silent()
         self.preview = None
         self._update_bars()
         if self.work is None:
@@ -1500,9 +1614,19 @@ class App(tk.Tk):
         v = float(value)
         self.params[key] = v
         label.configure(text=f"{v:.0f}")
-        # 有滤镜/高级预览在场时，重算要经过它们，放慢一点防止堆积
-        delay = 200 if (self.pending_filter or self.pending_adv) else 40
+        # 有滤镜/高级/增强预览在场时，重算要经过它们，放慢一点防止堆积
+        delay = 200 if (self.pending_filter or self.pending_adv
+                        or self.pending_enhance) else 40
         self._schedule_preview(delay)
+
+    def _on_enhance_slider(self, key, value, label):
+        v = float(value)
+        label.configure(text=f"{v:.0f}")
+        self.set_enhance(self._enhance_spec())
+
+    def _enhance_spec(self):
+        return {"kind": "enhance",
+                **{k: int(var.get()) for k, var in self.enh_vars.items()}}
 
     def reset_adjustments(self, redraw=True):
         self._reset_params_silent()
