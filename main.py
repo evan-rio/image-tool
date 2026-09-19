@@ -700,6 +700,9 @@ class App(tk.Tk):
         self.crop_start = None
         self.crop_rect = None
         self.crop_item = None
+        self.persp_mode = False
+        self.persp_pts = []             # 透视矫正的四个角点（view_src 坐标）
+        self.persp_items = []           # 画布上对应的点/线 item id
         self._preview_job = None
         self._pan_start = None
 
@@ -959,6 +962,14 @@ class App(tk.Tk):
         for w in self.winfo_children():
             w.destroy()
         self.title(APP_NAME)
+        # 画布重建了，画布上的取点模式与叠加层一并复位
+        self.crop_mode = False
+        self.crop_start = None
+        self.crop_item = None
+        self.crop_rect = None
+        self.persp_mode = False
+        self.persp_pts = []
+        self.persp_items = []
 
         self._build_menu()
         self._build_toolbar()
@@ -1131,6 +1142,17 @@ class App(tk.Tk):
         ttk.Label(f, text=t("geo_crop_hint"),
                   foreground="#666", wraplength=290, justify="left").pack(anchor="w", pady=2)
         ttk.Button(f, text=t("geo_clear_sel"), command=self.clear_crop).pack(fill="x", pady=2)
+
+        ttk.Separator(f, orient="horizontal").pack(fill="x", pady=8)
+        self.b_persp = ttk.Button(f, text=t("geo_persp"), command=self.toggle_persp)
+        self.b_persp.pack(fill="x", pady=2)
+        ttk.Label(f, text=t("geo_persp_hint"),
+                  foreground="#666", wraplength=290, justify="left").pack(anchor="w", pady=2)
+        self.b_apply_persp = ttk.Button(f, text=t("geo_persp_apply"),
+                                        command=self.apply_persp)
+        self.b_apply_persp.pack(fill="x", pady=2)
+        ttk.Button(f, text=t("geo_persp_clear"),
+                   command=self.clear_persp).pack(fill="x", pady=2)
         return f
 
     def _tab_advanced(self, nb):
@@ -1524,6 +1546,8 @@ class App(tk.Tk):
             self._reset_params_silent()
             self._reset_enhance_silent()
         self.preview = None
+        if getattr(self, "canvas", None) is not None:
+            self.clear_persp()          # 源图/缩放变了，旧坐标上的四点失效
         self._update_bars()
         if self.work is None:
             self.view_src = None
@@ -1687,6 +1711,10 @@ class App(tk.Tk):
     def toggle_crop(self):
         if self.work is None:
             return
+        if self.persp_mode:                 # 两者都在画布上取点，互斥
+            self.persp_mode = False
+            self.clear_persp()
+            self.b_persp.configure(text=t("geo_persp"))
         self.crop_mode = not self.crop_mode
         self.b_crop.configure(text=t("tb_crop_exit") if self.crop_mode else t("tb_crop"))
         self.config(cursor="crosshair" if self.crop_mode else "")
@@ -1724,6 +1752,108 @@ class App(tk.Tk):
         self._refresh_view_src()
         self.fit_window()
         self.update_status(msg)
+
+    # ---------------- 透视矫正 / 拉直 ----------------
+
+    def toggle_persp(self):
+        if self.work is None:
+            return
+        if self.crop_mode:                  # 两者都在画布上取点，互斥
+            self.crop_mode = False
+            self.clear_crop()
+            self.b_crop.configure(text=t("tb_crop"))
+        self.persp_mode = not self.persp_mode
+        self.b_persp.configure(text=t("geo_persp_exit") if self.persp_mode
+                               else t("geo_persp"))
+        self.config(cursor="crosshair" if self.persp_mode else "")
+        if not self.persp_mode:
+            self.clear_persp()
+        self.update_status(t("geo_persp_hint") if self.persp_mode
+                           else t("crop_exited"))
+
+    def clear_persp(self):
+        for it in self.persp_items:
+            try:
+                self.canvas.delete(it)
+            except tk.TclError:
+                pass
+        self.persp_items = []
+        self.persp_pts = []
+
+    def _canvas_to_view(self, event):
+        """画布坐标 -> view_src 坐标（与裁剪同一套换算）"""
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        cx, cy = self._clamp_to_image(cx, cy)
+        ox, oy = self._img_offset
+        return (cx - ox) / self.zoom, (cy - oy) / self.zoom
+
+    def _v2c(self, vx, vy):
+        """view_src 坐标 -> 画布坐标"""
+        ox, oy = self._img_offset
+        return ox + vx * self.zoom, oy + vy * self.zoom
+
+    def _redraw_persp(self):
+        for it in self.persp_items:
+            try:
+                self.canvas.delete(it)
+            except tk.TclError:
+                pass
+        self.persp_items = []
+        pts = [self._v2c(vx, vy) for vx, vy in self.persp_pts]
+        flat = [c for p in pts for c in p]
+        if len(pts) == 4:
+            self.persp_items.append(self.canvas.create_polygon(
+                *flat, outline="#FFAA00", fill="", width=2))
+        elif len(pts) >= 2:
+            self.persp_items.append(self.canvas.create_line(
+                *flat, fill="#00A8FF", width=2, dash=(4, 2)))
+        for x, y in pts:
+            self.persp_items.append(self.canvas.create_oval(
+                x - 4, y - 4, x + 4, y + 4, fill="#00A8FF",
+                outline="#FFFFFF", width=1))
+
+    @staticmethod
+    def _order_quad(pts):
+        """把四个点重排成 左上/右上/右下/左下，点击顺序随便"""
+        s = [p[0] + p[1] for p in pts]
+        d = [p[0] - p[1] for p in pts]
+        return [pts[s.index(min(s))], pts[d.index(max(d))],
+                pts[s.index(max(s))], pts[d.index(min(d))]]
+
+    @staticmethod
+    def _quad_ok(src):
+        """挡掉重复点 / 共线 / 面积过小。getPerspectiveTransform 对退化输入
+        不报错、只给出病态矩阵，所以必须自己先判。"""
+        for i in range(4):
+            for j in range(i + 1, 4):
+                if np.linalg.norm(src[i] - src[j]) <= 2.0:
+                    return False
+        return abs(cv2.contourArea(src.reshape(-1, 1, 2))) > 100.0
+
+    def apply_persp(self):
+        if self.work is None or len(self.persp_pts) != 4:
+            self.update_status(t("geo_persp_need4"))
+            return
+        s = self.view_scale
+        ih, iw = self.work.shape[:2]
+        src = np.float32([[x * s, y * s] for x, y in self._order_quad(self.persp_pts)])
+        src[:, 0] = np.clip(src[:, 0], 0, iw - 1)
+        src[:, 1] = np.clip(src[:, 1], 0, ih - 1)
+        if not self._quad_ok(src):
+            messagebox.showwarning(APP_NAME, t("geo_persp_degenerate"))
+            return
+        w = int(round(max(np.linalg.norm(src[1] - src[0]),
+                          np.linalg.norm(src[2] - src[3]))))
+        h = int(round(max(np.linalg.norm(src[3] - src[0]),
+                          np.linalg.norm(src[2] - src[1]))))
+        if w < 8 or h < 8:
+            messagebox.showwarning(APP_NAME, t("geo_persp_degenerate"))
+            return
+        dst = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
+        m = cv2.getPerspectiveTransform(src, dst)
+        self.work = cv2.warpPerspective(self.work, m, (w, h), flags=cv2.INTER_CUBIC)
+        self.clear_persp()
+        self._after_geometry(t("geo_persp_done", w=w, h=h))
 
     # ---------------- 滤镜 / 高级 ----------------
 
@@ -1831,6 +1961,8 @@ class App(tk.Tk):
         self._img_offset = (off_x, off_y)
         self.canvas.coords(self._img_item, off_x, off_y)
         self.canvas.configure(scrollregion=(0, 0, max(cw, dw), max(ch, dh)))
+        if self.persp_mode and self.persp_pts:
+            self._redraw_persp()        # 缩放/居中后按新 offset 重画四点
 
     MAX_DISPLAY = 12000
 
@@ -1891,11 +2023,16 @@ class App(tk.Tk):
             self.clear_crop()
             self.crop_item = self.canvas.create_rectangle(
                 cx, cy, cx, cy, outline="#00A8FF", width=2, dash=(4, 2))
+        elif self.persp_mode:
+            if len(self.persp_pts) < 4:
+                self.persp_pts.append(self._canvas_to_view(event))
+                self._redraw_persp()
+                self.update_status(t("geo_persp_clicked", n=len(self.persp_pts)))
         else:
             self.canvas.scan_mark(event.x, event.y)
 
     def _on_drag(self, event):
-        if self.view_src is None:
+        if self.view_src is None or self.persp_mode:
             return
         if self.crop_mode and self.crop_start is not None:
             cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
