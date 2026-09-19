@@ -2,10 +2,10 @@
 
 | Platform | File | Notes |
 |---|---|---|
-| **Windows** | `image-tool-1.0.8-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
-| **Windows** | `image-tool-1.0.8-windows-portable.zip` | Portable — unzip and run, no installation |
-| **macOS (Apple Silicon)** | `image-tool-1.0.8-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
-| **macOS (Intel)** | `image-tool-1.0.8-macos-x86_64.dmg` | For Intel-based Macs |
+| **Windows** | `image-tool-1.0.9-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
+| **Windows** | `image-tool-1.0.9-windows-portable.zip` | Portable — unzip and run, no installation |
+| **macOS (Apple Silicon)** | `image-tool-1.0.9-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
+| **macOS (Intel)** | `image-tool-1.0.9-macos-x86_64.dmg` | For Intel-based Macs |
 
 The macOS builds are also available as `.zip` archives. The bundled runtime means **no Python installation is required**.
 
@@ -65,10 +65,10 @@ MIT License — see [LICENSE](https://github.com/evan-rio/image-tool/blob/main/L
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| **Windows** | `image-tool-1.0.8-windows-setup.exe` | 安装包，创建开始菜单和桌面快捷方式 |
-| **Windows** | `image-tool-1.0.8-windows-portable.zip` | 便携版，解压即用，免安装 |
-| **macOS（M 系列）** | `image-tool-1.0.8-macos-arm64.dmg` | 打开后把图标拖进「应用程序」 |
-| **macOS（Intel）** | `image-tool-1.0.8-macos-x86_64.dmg` | 适用于 Intel 芯片的 Mac |
+| **Windows** | `image-tool-1.0.9-windows-setup.exe` | 安装包，创建开始菜单和桌面快捷方式 |
+| **Windows** | `image-tool-1.0.9-windows-portable.zip` | 便携版，解压即用，免安装 |
+| **macOS（M 系列）** | `image-tool-1.0.9-macos-arm64.dmg` | 打开后把图标拖进「应用程序」 |
+| **macOS（Intel）** | `image-tool-1.0.9-macos-x86_64.dmg` | 适用于 Intel 芯片的 Mac |
 
 macOS 版另有 `.zip` 压缩包可选。程序自带运行时，**不需要单独安装 Python**。
 

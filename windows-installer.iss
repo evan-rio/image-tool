@@ -8,7 +8,7 @@
 ; Version default. Can be overridden from the command line so it can be
 ; taken straight from main.py and never drift from the app's own version.
 #ifndef AppVersion
-  #define AppVersion "1.0.8"
+  #define AppVersion "1.0.9"
 #endif
 #define AppExe "OpenCV Image Tool.exe"
 #define SrcDir "dist\OpenCV Image Tool"
