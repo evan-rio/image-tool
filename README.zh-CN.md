@@ -14,10 +14,10 @@
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| **Windows** | `image-tool-1.0.7-windows-setup.exe` | 安装包，创建开始菜单和桌面快捷方式 |
-| **Windows** | `image-tool-1.0.7-windows-portable.zip` | 便携版，解压即用，免安装 |
-| **macOS（M 系列）** | `image-tool-1.0.7-macos-arm64.dmg` | 打开后把图标拖进「应用程序」 |
-| **macOS（Intel）** | `image-tool-1.0.7-macos-x86_64.dmg` | 同上，适用于 Intel 芯片的 Mac |
+| **Windows** | `image-tool-1.0.8-windows-setup.exe` | 安装包，创建开始菜单和桌面快捷方式 |
+| **Windows** | `image-tool-1.0.8-windows-portable.zip` | 便携版，解压即用，免安装 |
+| **macOS（M 系列）** | `image-tool-1.0.8-macos-arm64.dmg` | 打开后把图标拖进「应用程序」 |
+| **macOS（Intel）** | `image-tool-1.0.8-macos-x86_64.dmg` | 同上，适用于 Intel 芯片的 Mac |
 
 macOS 版另有 `.zip` 压缩包可选。
 
