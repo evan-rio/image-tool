@@ -14,10 +14,10 @@ Get the latest build from the **[Releases](../../releases/latest)** page:
 
 | Platform | File | Notes |
 |---|---|---|
-| **Windows** | `image-tool-1.0.8-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
-| **Windows** | `image-tool-1.0.8-windows-portable.zip` | Portable — unzip and run, no installation |
-| **macOS (Apple Silicon)** | `image-tool-1.0.8-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
-| **macOS (Intel)** | `image-tool-1.0.8-macos-x86_64.dmg` | Same, for Intel-based Macs |
+| **Windows** | `image-tool-1.0.9-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
+| **Windows** | `image-tool-1.0.9-windows-portable.zip` | Portable — unzip and run, no installation |
+| **macOS (Apple Silicon)** | `image-tool-1.0.9-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
+| **macOS (Intel)** | `image-tool-1.0.9-macos-x86_64.dmg` | Same, for Intel-based Macs |
 
 The macOS builds are also available as `.zip` archives if you prefer.
 
@@ -55,6 +55,7 @@ Resize, filter, enhance, convert format, and watermark an entire folder. The ope
 - Undo / redo (20 steps)
 - Hold **"View original"** to compare at any time
 - Images are automatically centred on the canvas
+- **macOS trackpad** — two-finger scroll pans the image, pinch zooms; hold **Command** and scroll to zoom too
 - **Full support for non-ASCII (e.g. Chinese) file paths**
 
 ### Supported output formats (18)

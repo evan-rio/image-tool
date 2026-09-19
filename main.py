@@ -21,7 +21,7 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 from lang import (t, APP_NAME, available_languages, current_language,
                   set_language, save_language, init_language)
-APP_VERSION = "1.0.8"
+APP_VERSION = "1.0.9"
 
 SUPPORTED_READ = (".jpg", ".jpeg", ".jfif", ".png", ".bmp", ".webp", ".tif", ".tiff",
                   ".gif", ".jp2", ".avif", ".ico", ".tga", ".qoi", ".ppm", ".pgm",

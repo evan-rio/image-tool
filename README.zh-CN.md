@@ -14,10 +14,10 @@
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| **Windows** | `image-tool-1.0.8-windows-setup.exe` | 安装包，创建开始菜单和桌面快捷方式 |
-| **Windows** | `image-tool-1.0.8-windows-portable.zip` | 便携版，解压即用，免安装 |
-| **macOS（M 系列）** | `image-tool-1.0.8-macos-arm64.dmg` | 打开后把图标拖进「应用程序」 |
-| **macOS（Intel）** | `image-tool-1.0.8-macos-x86_64.dmg` | 同上，适用于 Intel 芯片的 Mac |
+| **Windows** | `image-tool-1.0.9-windows-setup.exe` | 安装包，创建开始菜单和桌面快捷方式 |
+| **Windows** | `image-tool-1.0.9-windows-portable.zip` | 便携版，解压即用，免安装 |
+| **macOS（M 系列）** | `image-tool-1.0.9-macos-arm64.dmg` | 打开后把图标拖进「应用程序」 |
+| **macOS（Intel）** | `image-tool-1.0.9-macos-x86_64.dmg` | 同上，适用于 Intel 芯片的 Mac |
 
 macOS 版另有 `.zip` 压缩包可选。
 
@@ -55,6 +55,7 @@ macOS 版另有 `.zip` 压缩包可选。
 - 撤销 / 重做（上限 20 步）
 - 「按住看原图」随时对比
 - 图片在画布中自动居中显示
+- **macOS 触控板** —— 双指滚动平移图片、捏合缩放；按住 **Command** 滚动同样可缩放
 - **完整支持中文路径**的读取与保存
 
 ### 支持的输出格式（18 种）
