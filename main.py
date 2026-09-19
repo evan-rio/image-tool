@@ -752,6 +752,9 @@ class App(tk.Tk):
         self._poll_id = self.after(50, self._poll_ui_queue)
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
+        self._pinch_monitor = None
+        self._install_pinch()
+
     # 后台线程不能直接碰 Tk（Tcl 解释器只允许主线程访问），
     # 统一把要执行的动作丢进队列，由主线程轮询取出执行。
     def post(self, fn):
@@ -2031,6 +2034,45 @@ class App(tk.Tk):
             return "break"
         self.set_zoom(self.zoom * MAC_WHEEL_BASE ** d)
         return "break"
+
+    # ---------------- macOS 捏合缩放 ----------------
+    # Tk 8.6 不会把捏合手势交给 Tkinter，只能借 pyobjc 挂一个本地事件监视器，
+    # 从系统层把 magnify 手势接下来自己处理。装不上就静默跳过——缩放仍可用
+    # Command+滚动或工具栏按钮，绝不因为拿不到 pyobjc 就让程序起不来。
+
+    def _install_pinch(self):
+        if not IS_MAC or self._pinch_monitor is not None:
+            return
+        try:
+            import AppKit
+        except Exception:
+            return
+        mask = getattr(AppKit, "NSEventMaskMagnify", None) \
+            or getattr(AppKit, "NSMagnificationGestureEventMask", None)
+        if mask is None:
+            return
+
+        def handler(event):
+            try:
+                mag = float(event.magnification())
+            except Exception:
+                mag = 0.0
+            if mag:
+                # 回调跑在 Cocoa 事件循环里，不能直接改 Tk，丢回 Tk 队列执行
+                self.after(0, lambda m=mag: self._pinch_zoom(m))
+            return event
+
+        try:
+            self._pinch_monitor = AppKit.NSEvent \
+                .addLocalMonitorForEventsMatchingMask_handler_(mask, handler)
+        except Exception:
+            self._pinch_monitor = None
+
+    def _pinch_zoom(self, mag):
+        if self.view_src is None:
+            return
+        step = max(-0.35, min(0.35, mag))       # 夹一下，防单帧跳太多
+        self.set_zoom(self.zoom * (1.0 + step))
 
     def _pan_by_wheel(self, event):
         """把 mac 的双指滚动映射成画布平移；按住 Shift 则横向平移。"""

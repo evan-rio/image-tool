@@ -2,3 +2,7 @@
 opencv-python>=4.8
 Pillow>=10.0
 pyinstaller>=6.0
+
+# 仅 macOS：Tk 8.6 收不到触控板的捏合手势，借 pyobjc 挂 NSEvent 监视器自己接。
+# Windows / Linux 上不会安装（靠平台标记排除）。
+pyobjc-framework-Cocoa; sys_platform == "darwin"
