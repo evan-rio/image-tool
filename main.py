@@ -21,7 +21,7 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 from lang import (t, APP_NAME, available_languages, current_language,
                   set_language, save_language, init_language)
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 
 SUPPORTED_READ = (".jpg", ".jpeg", ".jfif", ".png", ".bmp", ".webp", ".tif", ".tiff",
                   ".gif", ".jp2", ".avif", ".ico", ".tga", ".qoi", ".ppm", ".pgm",
@@ -29,6 +29,13 @@ SUPPORTED_READ = (".jpg", ".jpeg", ".jfif", ".png", ".bmp", ".webp", ".tif", ".t
 VIEW_MAX = 2000          # 预览用图最大边长，超过则缩放后再调色，保证流畅
 HISTORY_LIMIT = 20
 FACE_MODEL = "face_detection_yunet_2023mar.onnx"
+
+# macOS 触控板缩放：滚轮 delta 的量级和 Windows 不同（Windows 每格 ±120，
+# macOS 每格 ±1，且一次双指手势会连发大量事件）。沿用 Windows 的固定 1.15
+# 会让缩放失控发飘，所以 mac 分支按 delta 大小换算，并夹住单次上限。
+# 这两个值按 mac 真机手感微调即可，不影响 Windows。
+MAC_WHEEL_BASE = 1.05
+MAC_WHEEL_DELTA_CAP = 2.0
 
 # 可输出的图片格式：(扩展名, 界面显示名, 质量参数类型或 None, 是否只支持灰度)
 IMAGE_FORMATS = [
@@ -1693,7 +1700,14 @@ class App(tk.Tk):
     def _on_wheel(self, event):
         if self.view_src is None:
             return
-        factor = 1.15 if event.delta > 0 else 1 / 1.15
+        if IS_MAC:
+            d = float(event.delta)
+            d = max(-MAC_WHEEL_DELTA_CAP, min(MAC_WHEEL_DELTA_CAP, d))
+            if d == 0:
+                return "break"
+            factor = MAC_WHEEL_BASE ** d
+        else:
+            factor = 1.15 if event.delta > 0 else 1 / 1.15
         self.set_zoom(self.zoom * factor)
         return "break"
 
