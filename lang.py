@@ -264,16 +264,17 @@ STRINGS = {
         "about": "{name}  v{ver}\n\n基于 OpenCV {cv} 与 Python 构建\n本机离线运行，不联网、不上传任何图片。",
         "help": (
             "1. 「打开」选择一张图片，滚轮缩放，按住左键拖动可平移。\n"
-            "2. 左侧「调色」拖动滑块实时预览，满意后点「应用调色」。\n"
-            "3. 「几何」可旋转、镜像、改尺寸；点「裁剪模式」后在图上拖拽框选，再点「应用裁剪」。\n"
-            "4. 「高级」里有一键自动增强、边缘检测、人脸检测。\n"
-            "5. 「批量」可对整个文件夹做缩放 / 转格式 / 加水印。\n"
-            "6. Ctrl+Z 撤销，Ctrl+Y 重做，Ctrl+S 保存。"
+            "2. 「调色」拖动滑块实时预览，满意后点「应用调色」。\n"
+            "3. 「滤镜」一键套用，「增强」可降噪 / 锐化 / 局部对比度 / 暗角。\n"
+            "4. 「几何」可旋转、镜像、改尺寸、裁剪；「透视矫正」点选四个角点可把画面拉正。\n"
+            "5. 「高级」里有一键自动增强、边缘检测、人脸检测。\n"
+            "6. 「批量」可对整个文件夹做缩放 / 滤镜 / 画质增强 / 转格式 / 加水印。\n"
+            "7. Ctrl+Z 撤销，Ctrl+Y 重做，Ctrl+S 保存。"
         ),
 
         # ---- 批量处理 ----
         "batch_title": "批量处理",
-        "batch_desc": "对一整个文件夹的图片批量做缩放 / 转格式 / 加水印。三种处理可以叠加，结果输出到单独的文件夹，不改动原图。",
+        "batch_desc": "对一整个文件夹的图片批量做缩放 / 滤镜 / 画质增强 / 转格式 / 加水印。可叠加，结果输出到单独的文件夹，不改动原图。",
         "grp_folders": "文件夹",
         "lbl_src": "源文件夹",
         "lbl_dst": "输出到",
@@ -298,6 +299,10 @@ STRINGS = {
         "lbl_font_size": "字号",
         "lbl_opacity": "透明度",
         "btn_color": "颜色",
+        "grp_img_ops": "画质处理",
+        "chk_filter_batch": "套用滤镜",
+        "batch_filter_none": "不处理",
+        "chk_enhance_batch": "画质增强",
         "grp_task": "任务",
         "btn_start": "开始处理",
         "btn_pause": "暂停",
@@ -549,15 +554,17 @@ STRINGS = {
         "help": (
             "1. Click Open to choose an image. Scroll to zoom, drag to pan.\n"
             "2. Drag the sliders in Adjust for a live preview, then click Apply.\n"
-            "3. Geometry rotates, flips and resizes; turn on Crop mode, drag on\n"
-            "   the image to select an area, then click Apply crop.\n"
-            "4. Advanced has one-click auto enhance, edge detection and face detection.\n"
-            "5. Batch resizes, converts and watermarks a whole folder.\n"
-            "6. Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save."
+            "3. Filters apply in one click; Enhance adds denoise, sharpen,\n"
+            "   local contrast and vignette.\n"
+            "4. Geometry rotates, flips, resizes and crops; Perspective straightens\n"
+            "   an image from four corner points.\n"
+            "5. Advanced has one-click auto enhance, edge detection and face detection.\n"
+            "6. Batch resizes, filters, enhances, converts and watermarks a whole folder.\n"
+            "7. Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save."
         ),
 
         "batch_title": "Batch processing",
-        "batch_desc": "Resize, convert and watermark every image in a folder. The three operations stack, results go to a separate folder, and your originals are never modified.",
+        "batch_desc": "Resize, filter, enhance, convert and watermark every image in a folder. The operations stack, results go to a separate folder, and your originals are never modified.",
         "grp_folders": "Folders",
         "lbl_src": "Source",
         "lbl_dst": "Output to",
@@ -582,6 +589,10 @@ STRINGS = {
         "lbl_font_size": "Size",
         "lbl_opacity": "Opacity",
         "btn_color": "Colour",
+        "grp_img_ops": "Image processing",
+        "chk_filter_batch": "Apply filter",
+        "batch_filter_none": "None",
+        "chk_enhance_batch": "Image enhance",
         "grp_task": "Task",
         "btn_start": "Start",
         "btn_pause": "Pause",

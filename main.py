@@ -548,6 +548,15 @@ def wm_position_values():
     return [t(key) for _, key in WM_POSITIONS]
 
 
+# 批量里可选的一键滤镜；内部代号直接用滤镜 id，「不处理」用 none 占位
+BATCH_FILTER_TABLE = [("none", "batch_filter_none")] + \
+    [(fid, "filter_" + fid) for fid, _ in FILTERS]
+
+
+def filter_values():
+    return [t(key) for _, key in BATCH_FILTER_TABLE]
+
+
 def hex_to_bgr(s, default=(0, 0, 255)):
     s = (s or "").lstrip("#")
     try:
@@ -2177,6 +2186,15 @@ class BatchPanel(ttk.Frame):
         self.wm_size = tk.IntVar(value=36)
         self.wm_color = "#FFFFFF"
 
+        self.do_filter = tk.BooleanVar(value=False)
+        self.filter_name = tk.StringVar(value=t("batch_filter_none"))
+
+        self.do_enhance = tk.BooleanVar(value=False)
+        self.enh_denoise = tk.IntVar(value=0)
+        self.enh_sharpen = tk.IntVar(value=0)
+        self.enh_clahe = tk.IntVar(value=0)
+        self.enh_vignette = tk.IntVar(value=0)
+
         # 任务控制
         self._stop = threading.Event()      # 置位 = 请求停止
         self._pause = threading.Event()     # 置位 = 暂停中
@@ -2371,6 +2389,27 @@ class BatchPanel(ttk.Frame):
         ttk.Scale(r, from_=0, to=100, variable=self.wm_opacity, orient="horizontal",
                   length=80).pack(side="left")
 
+        # ---- 画质处理（滤镜 / 增强）----
+        f2c = ttk.LabelFrame(self, text=t("grp_img_ops"), padding=10)
+        f2c.pack(fill="x", pady=(10, 0))
+        r = ttk.Frame(f2c, padding=(0, 2))
+        r.pack(fill="x")
+        ttk.Checkbutton(r, text=t("chk_filter_batch"),
+                        variable=self.do_filter).pack(side="left")
+        ttk.Combobox(r, textvariable=self.filter_name, width=16, state="readonly",
+                     values=filter_values()).pack(side="left", padx=6)
+
+        r = ttk.Frame(f2c, padding=(0, 2))
+        r.pack(fill="x")
+        ttk.Checkbutton(r, text=t("chk_enhance_batch"),
+                        variable=self.do_enhance).pack(side="left")
+        for lbl, var in ((t("enh_denoise"), self.enh_denoise),
+                         (t("enh_sharpen"), self.enh_sharpen),
+                         (t("enh_clahe"), self.enh_clahe),
+                         (t("enh_vignette"), self.enh_vignette)):
+            ttk.Label(r, text=lbl).pack(side="left", padx=(8, 2))
+            ttk.Spinbox(r, from_=0, to=100, textvariable=var, width=4).pack(side="left")
+
         # ---- 任务控制 ----
         f3 = ttk.LabelFrame(self, text=t("grp_task"), padding=10)
         f3.pack(fill="x", pady=(10, 0))
@@ -2481,6 +2520,13 @@ class BatchPanel(ttk.Frame):
             "opacity": int(self.wm_opacity.get()),
             "size": int(self.wm_size.get()),
             "color": self.wm_color,
+            "filter": self.do_filter.get(),
+            "filter_name": _display_to_id(self.filter_name.get(), BATCH_FILTER_TABLE, "none"),
+            "enhance": self.do_enhance.get(),
+            "denoise": int(self.enh_denoise.get()),
+            "sharpen": int(self.enh_sharpen.get()),
+            "clahe": int(self.enh_clahe.get()),
+            "vignette": int(self.enh_vignette.get()),
         }
 
     def _run(self, files, src, dst, cfg):
@@ -2505,6 +2551,8 @@ class BatchPanel(ttk.Frame):
 
                 if cfg["resize"]:
                     img = self._resize(img, cfg)
+                img = self._apply_filter(img, cfg)
+                img = self._apply_enhance(img, cfg)
                 if cfg["watermark"]:
                     img = self._watermark(img, cfg)
 
@@ -2539,6 +2587,24 @@ class BatchPanel(ttk.Frame):
             self.post(lambda v=i: self._tick(v))
 
         self.post(lambda o=ok, f=fail, s=stopped: self._done(o, f, s))
+
+    @staticmethod
+    def _apply_filter(img, cfg):
+        name = cfg.get("filter_name", "none")
+        if not cfg.get("filter") or name == "none" or name not in FILTER_MAP:
+            return img
+        return apply_tool(img, {"kind": "filter", "name": name})
+
+    @staticmethod
+    def _apply_enhance(img, cfg):
+        if not cfg.get("enhance"):
+            return img
+        spec = {"kind": "enhance",
+                "denoise": cfg.get("denoise", 0), "sharpen": cfg.get("sharpen", 0),
+                "clahe": cfg.get("clahe", 0), "vignette": cfg.get("vignette", 0)}
+        if not any(spec[k] for k in ("denoise", "sharpen", "clahe", "vignette")):
+            return img
+        return apply_tool(img, spec)
 
     @staticmethod
     def _resize(img, cfg):
