@@ -14,10 +14,10 @@ Get the latest build from the **[Releases](../../releases/latest)** page:
 
 | Platform | File | Notes |
 |---|---|---|
-| **Windows** | `image-tool-1.0.6-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
-| **Windows** | `image-tool-1.0.6-windows-portable.zip` | Portable — unzip and run, no installation |
-| **macOS (Apple Silicon)** | `image-tool-1.0.6-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
-| **macOS (Intel)** | `image-tool-1.0.6-macos-x86_64.dmg` | Same, for Intel-based Macs |
+| **Windows** | `image-tool-1.0.7-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
+| **Windows** | `image-tool-1.0.7-windows-portable.zip` | Portable — unzip and run, no installation |
+| **macOS (Apple Silicon)** | `image-tool-1.0.7-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
+| **macOS (Intel)** | `image-tool-1.0.7-macos-x86_64.dmg` | Same, for Intel-based Macs |
 
 The macOS builds are also available as `.zip` archives if you prefer.
 
@@ -39,13 +39,14 @@ You only need to do this once.
 | Panel | Contents |
 |---|---|
 | **Adjust** | Brightness, contrast, saturation, warmth, sharpen, blur — live preview while dragging |
-| **Filters** | Grayscale, black & white, invert, sepia, vintage, sketch, pencil, cartoon, emboss, warm, cool |
-| **Geometry** | Rotate (90° / 180° / any angle), flip horizontal & vertical, resize (aspect-ratio lock), drag-to-crop |
+| **Filters** | Grayscale, black & white, invert, sepia, vintage, sketch, pencil, cartoon, emboss, warm, cool, oil paint, detail enhance, posterize, film grain, dehaze |
+| **Enhance** | Denoise, sharpen / detail, local contrast (CLAHE), vignette — live preview |
+| **Geometry** | Rotate (90° / 180° / any angle), flip horizontal & vertical, resize (aspect-ratio lock), drag-to-crop, four-point perspective correction |
 | **Advanced** | Auto-enhance, edge detection (live Canny thresholds), face detection (sensitivity, minimum face size, box colour, line width, confidence labels, facial landmarks) |
 
 ### Batch processing
 
-Resize, convert format, and watermark an entire folder. The three operations stack, results go to a separate output folder, and **your originals are never modified**. Supports **pause, resume, and stop**.
+Resize, filter, enhance, convert format, and watermark an entire folder. The operations stack, results go to a separate output folder, and **your originals are never modified**. Supports **pause, resume, and stop**.
 
 ### Other
 
