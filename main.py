@@ -30,12 +30,15 @@ VIEW_MAX = 2000          # 预览用图最大边长，超过则缩放后再调�
 HISTORY_LIMIT = 20
 FACE_MODEL = "face_detection_yunet_2023mar.onnx"
 
-# macOS 触控板缩放：滚轮 delta 的量级和 Windows 不同（Windows 每格 ±120，
-# macOS 每格 ±1，且一次双指手势会连发大量事件）。沿用 Windows 的固定 1.15
-# 会让缩放失控发飘，所以 mac 分支按 delta 大小换算，并夹住单次上限。
-# 这两个值按 mac 真机手感微调即可，不影响 Windows。
+# macOS 触控/滚轮的规则和 Windows 不同（Windows 滚轮 = 缩放）：
+#   - 双指滚动 = 平移图片（符合 Mac 习惯；按住 Shift 则横向平移）
+#   - Command + 滚动 = 缩放
+# mac 的 delta 量级也小（每格 ±1，且一次手势会连发大量事件），所以缩放按
+# delta 大小换算并夹住上限；平移按固定像素步长。数值可按真机手感微调，
+# 这套判断只在 mac 上生效，Windows 一行都不受影响。
 MAC_WHEEL_BASE = 1.05
 MAC_WHEEL_DELTA_CAP = 2.0
+MAC_PAN_STEP = 14        # mac 双指滚动每单位 delta 平移的像素数
 
 # 可输出的图片格式：(扩展名, 界面显示名, 质量参数类型或 None, 是否只支持灰度)
 IMAGE_FORMATS = [
@@ -1499,6 +1502,14 @@ class App(tk.Tk):
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
         self.canvas.bind("<MouseWheel>", self._on_wheel)
+        if IS_MAC:
+            # Command + 滚动 = 缩放。个别 Tk 版本不认 Command 修饰符，
+            # 绑不上也只是少一种缩放手势，不能连累整个画布初始化。
+            for seq in ("<Command-MouseWheel>", "<Control-MouseWheel>"):
+                try:
+                    self.canvas.bind(seq, self._on_wheel_zoom)
+                except tk.TclError:
+                    pass
         self.canvas.bind("<Configure>", lambda e: self._on_canvas_resize())
 
     def _set_controls_enabled(self, on):
@@ -2001,18 +2012,51 @@ class App(tk.Tk):
         self._recenter()
 
     def _on_wheel(self, event):
+        """Windows 上滚轮 = 缩放；macOS 上双指滚动 = 平移（缩放见 _on_wheel_zoom）。"""
         if self.view_src is None:
             return
         if IS_MAC:
-            d = float(event.delta)
-            d = max(-MAC_WHEEL_DELTA_CAP, min(MAC_WHEEL_DELTA_CAP, d))
-            if d == 0:
-                return "break"
-            factor = MAC_WHEEL_BASE ** d
-        else:
-            factor = 1.15 if event.delta > 0 else 1 / 1.15
+            self._pan_by_wheel(event)
+            return "break"
+        factor = 1.15 if event.delta > 0 else 1 / 1.15
         self.set_zoom(self.zoom * factor)
         return "break"
+
+    def _on_wheel_zoom(self, event):
+        """macOS 的 Command/Control + 滚动 = 缩放（双指捏合在 Tk 8.6 上拿不到）。"""
+        if self.view_src is None:
+            return
+        d = max(-MAC_WHEEL_DELTA_CAP, min(MAC_WHEEL_DELTA_CAP, float(event.delta)))
+        if d == 0:
+            return "break"
+        self.set_zoom(self.zoom * MAC_WHEEL_BASE ** d)
+        return "break"
+
+    def _pan_by_wheel(self, event):
+        """把 mac 的双指滚动映射成画布平移；按住 Shift 则横向平移。"""
+        d = float(event.delta)
+        if d == 0:
+            return
+        step = -d * MAC_PAN_STEP
+        if event.state & 0x0001:            # Shift -> 横向
+            self._scroll_canvas(step, 0)
+        else:
+            self._scroll_canvas(0, step)
+
+    def _scroll_canvas(self, dx, dy):
+        """按像素平移画布视图（不动图片内容、不改缩放）。"""
+        try:
+            x0, y0, x1, y1 = (float(v)
+                              for v in str(self.canvas.cget("scrollregion")).split())
+        except (ValueError, TypeError):
+            return
+        rw, rh = x1 - x0, y1 - y0
+        if dx and rw > 0:
+            fx = self.canvas.xview()[0]
+            self.canvas.xview_moveto(fx + dx / rw)
+        if dy and rh > 0:
+            fy = self.canvas.yview()[0]
+            self.canvas.yview_moveto(fy + dy / rh)
 
     def _clamp_to_image(self, cx, cy):
         """把画布坐标夹到图片显示区域内（图片居中后四周可能留边）"""
