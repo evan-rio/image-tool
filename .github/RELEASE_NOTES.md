@@ -6,7 +6,7 @@
 - **Batch processing** now also applies filters and enhancement
 - **macOS trackpad fixed** — two-finger scroll pans, pinch zooms (previously every scroll zoomed)
 
-> This section describes the current release. Update it (and the Chinese copy below) before publishing a new version.
+<!-- Update this list (and the Chinese copy below) each release. -->
 
 ## Download
 
@@ -42,7 +42,7 @@ You only need to do this once.
 - **批量处理**现在也支持滤镜与画质增强
 - **修复 macOS 触控板**：双指滚动改为平移、捏合缩放（此前一滚动就缩放）
 
-> 本节描述的是当前版本，发布新版本前记得连同上面的英文一起更新。
+<!-- 发布新版本前，连同上面的英文一起更新本节。 -->
 
 ## 下载
 
