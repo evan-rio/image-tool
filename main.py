@@ -753,6 +753,7 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
         self._pinch_monitor = None
+        self._pinch_accum = 0.0
         self._install_pinch()
 
     # 后台线程不能直接碰 Tk（Tcl 解释器只允许主线程访问），
@@ -781,6 +782,12 @@ class App(tk.Tk):
                         pass
         except queue.Empty:
             pass
+        if getattr(self, "_pinch_accum", 0.0):
+            mag, self._pinch_accum = self._pinch_accum, 0.0
+            try:
+                self._pinch_zoom(mag)
+            except Exception:
+                self._pinch_accum = 0.0
         try:
             self._poll_id = self.after(50, self._poll_ui_queue)
         except tk.TclError:
@@ -2053,13 +2060,13 @@ class App(tk.Tk):
             return
 
         def handler(event):
+            # 这个回调跑在 Cocoa 的事件派发里，此时 Tcl 可能正处在自己的
+            # 事件循环中——在这里调用任何 Tk/Tcl 接口都是重入，会直接段错误
+            # 闪退。所以只做一次纯 Python 累加，真正的缩放在 Tk 的定时器里应用。
             try:
-                mag = float(event.magnification())
+                self._pinch_accum += float(event.magnification())
             except Exception:
-                mag = 0.0
-            if mag:
-                # 回调跑在 Cocoa 事件循环里，不能直接改 Tk，丢回 Tk 队列执行
-                self.after(0, lambda m=mag: self._pinch_zoom(m))
+                pass
             return event
 
         try:
