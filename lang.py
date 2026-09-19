@@ -67,6 +67,11 @@ STRINGS = {
         "filter_emboss": "浮雕",
         "filter_warm": "暖色调",
         "filter_cool": "冷色调",
+        "filter_oil": "油画",
+        "filter_detail": "细节增强",
+        "filter_posterize": "色调分离",
+        "filter_grain": "颗粒",
+        "filter_dehaze": "去雾",
 
         # ---- 工具名（状态栏用）----
         "tool_filter": "滤镜",
@@ -341,6 +346,11 @@ STRINGS = {
         "filter_emboss": "Emboss",
         "filter_warm": "Warm",
         "filter_cool": "Cool",
+        "filter_oil": "Oil paint",
+        "filter_detail": "Detail enhance",
+        "filter_posterize": "Posterize",
+        "filter_grain": "Film grain",
+        "filter_dehaze": "Dehaze",
 
         "tool_filter": "Filter",
         "tool_auto": "Auto enhance",

@@ -433,18 +433,56 @@ def f_cool(img):
     return out.astype(np.uint8)
 
 
+def f_oil(img):
+    # 油画（近似）。cv2.xphoto.oilPainting 属于 opencv-contrib，
+    # 本仓库只依赖 opencv-python，拿不到，用主包的风格化顶上。
+    return cv2.stylization(img, sigma_s=60, sigma_r=0.45)
+
+
+def f_detail(img):
+    return cv2.detailEnhance(img, sigma_s=10, sigma_r=0.15)
+
+
+def f_posterize(img):
+    q = 256 // 6
+    out = (img.astype(np.uint16) // q) * q + q // 2
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def f_grain(img):
+    # 固定随机种子：预览会反复重算，种子不固定的话每帧噪点都变、画面闪烁。
+    rng = np.random.default_rng(20240919)
+    noise = rng.normal(0.0, 12.0, img.shape).astype(np.float32)
+    return np.clip(img.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+
+
+def f_dehaze(img):
+    f = img.astype(np.float32)
+    kernel = np.ones((15, 15), np.uint8)
+    dark = cv2.erode(np.min(f, axis=2), kernel)
+    A = np.maximum(f.reshape(-1, 3)[int(np.argmax(dark))], 1.0)
+    t = 1.0 - 0.85 * cv2.erode(np.min(f / A, axis=2), kernel)
+    t = np.clip(t, 0.1, 1.0)[:, :, None]
+    return np.clip((f - A) / t + A, 0, 255).astype(np.uint8)
+
+
 FILTERS = [
-    ("gray",    f_gray),
-    ("bw",      f_binary),
-    ("invert",  f_invert),
-    ("sepia",   f_sepia),
-    ("vintage", f_vintage),
-    ("sketch",  f_sketch),
-    ("pencil",  f_pencil),
-    ("cartoon", f_cartoon),
-    ("emboss",  f_emboss),
-    ("warm",    f_warm),
-    ("cool",    f_cool),
+    ("gray",      f_gray),
+    ("bw",        f_binary),
+    ("invert",    f_invert),
+    ("sepia",     f_sepia),
+    ("vintage",   f_vintage),
+    ("sketch",    f_sketch),
+    ("pencil",    f_pencil),
+    ("cartoon",   f_cartoon),
+    ("emboss",    f_emboss),
+    ("warm",      f_warm),
+    ("cool",      f_cool),
+    ("oil",       f_oil),
+    ("detail",    f_detail),
+    ("posterize", f_posterize),
+    ("grain",     f_grain),
+    ("dehaze",    f_dehaze),
 ]
 
 FILTER_MAP = dict(FILTERS)
