@@ -14,10 +14,10 @@ Get the latest build from the **[Releases](../../releases/latest)** page:
 
 | Platform | File | Notes |
 |---|---|---|
-| **Windows** | `image-tool-1.0.9-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
-| **Windows** | `image-tool-1.0.9-windows-portable.zip` | Portable — unzip and run, no installation |
-| **macOS (Apple Silicon)** | `image-tool-1.0.9-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
-| **macOS (Intel)** | `image-tool-1.0.9-macos-x86_64.dmg` | Same, for Intel-based Macs |
+| **Windows** | `image-tool-1.0.10-windows-setup.exe` | Installer — adds Start Menu and desktop shortcuts |
+| **Windows** | `image-tool-1.0.10-windows-portable.zip` | Portable — unzip and run, no installation |
+| **macOS (Apple Silicon)** | `image-tool-1.0.10-macos-arm64.dmg` | Open the DMG and drag the app to Applications |
+| **macOS (Intel)** | `image-tool-1.0.10-macos-x86_64.dmg` | Same, for Intel-based Macs |
 
 The macOS builds are also available as `.zip` archives if you prefer.
 
